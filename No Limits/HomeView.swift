@@ -6,19 +6,14 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct HomeView: View {
     let onLogTap: () -> Void
     let onRankUp: (Rank) -> Void
 
-    // Mock data for design prototype
-    private let currentRank: Rank  = .gold
-    private let score: Double      = 1.05
-    private let progress: Double   = 0.72
-    private let streak: Int        = 7
-    private let xp: Int            = 340
-    private let totalLifts: Int    = 24
-    private let todayLogged: Bool  = false
+    @Environment(\.modelContext) private var modelContext
+    @State private var vm = HomeViewModel()
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -26,7 +21,7 @@ struct HomeView: View {
 
             // Ambient glow behind rank badge
             Circle()
-                .fill(currentRank.color.opacity(0.12))
+                .fill(vm.currentRank.color.opacity(0.12))
                 .frame(width: 320, height: 320)
                 .blur(radius: 60)
                 .offset(y: 100)
@@ -45,6 +40,7 @@ struct HomeView: View {
                 .padding(.bottom, 48)
             }
         }
+        .onAppear { vm.refresh(context: modelContext) }
     }
 
     // MARK: - Header
@@ -55,29 +51,31 @@ struct HomeView: View {
                 Text(greeting)
                     .font(.system(size: 14))
                     .foregroundColor(.textSecondary)
-                Text(todayLogged ? "Lift logged. Nice work." : "Time to lift.")
+                Text(vm.todayLogged ? "Lift logged. Nice work." : "Time to lift.")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.white)
             }
 
             Spacer()
 
-            HStack(spacing: 5) {
-                Image(systemName: "flame.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(LinearGradient.accent)
-                Text("\(streak)")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.white)
-                Text("day streak")
-                    .font(.system(size: 13))
-                    .foregroundColor(.textSecondary)
+            if vm.streak > 0 {
+                HStack(spacing: 5) {
+                    Image(systemName: "flame.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(LinearGradient.accent)
+                    Text("\(vm.streak)")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white)
+                    Text("day streak")
+                        .font(.system(size: 13))
+                        .foregroundColor(.textSecondary)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(Color.accentOrange.opacity(0.12))
+                .overlay(Capsule().strokeBorder(Color.accentOrange.opacity(0.35), lineWidth: 1))
+                .clipShape(Capsule())
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .background(Color.accentOrange.opacity(0.12))
-            .overlay(Capsule().strokeBorder(Color.accentOrange.opacity(0.35), lineWidth: 1))
-            .clipShape(Capsule())
         }
     }
 
@@ -89,30 +87,30 @@ struct HomeView: View {
             VStack(spacing: 18) {
                 ZStack {
                     Circle()
-                        .fill(currentRank.color.opacity(0.12))
+                        .fill(vm.currentRank.color.opacity(0.12))
                         .frame(width: 108, height: 108)
                     Circle()
                         .strokeBorder(
                             LinearGradient(
-                                colors: [currentRank.color, currentRank.color.opacity(0.25)],
+                                colors: [vm.currentRank.color, vm.currentRank.color.opacity(0.25)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
                             lineWidth: 1.5
                         )
                         .frame(width: 108, height: 108)
-                    Image(systemName: currentRank.symbolName)
+                    Image(systemName: vm.currentRank.symbolName)
                         .font(.system(size: 42, weight: .semibold))
-                        .foregroundColor(currentRank.color)
+                        .foregroundColor(vm.currentRank.color)
                 }
 
                 VStack(spacing: 4) {
-                    Text(currentRank.rawValue.uppercased())
+                    Text(vm.currentRank.rawValue.uppercased())
                         .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .foregroundColor(currentRank.color)
+                        .foregroundColor(vm.currentRank.color)
                         .tracking(3.5)
 
-                    Text(String(format: "%.2f", score))
+                    Text(String(format: "%.2f", vm.score))
                         .font(.system(size: 58, weight: .black, design: .rounded))
                         .foregroundColor(.white)
 
@@ -126,13 +124,13 @@ struct HomeView: View {
             // Progress bar
             VStack(spacing: 10) {
                 HStack {
-                    Text(currentRank.rawValue)
+                    Text(vm.currentRank.rawValue)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(currentRank.color)
+                        .foregroundColor(vm.currentRank.color)
                     Spacer()
-                    Text(currentRank.nextRank?.rawValue ?? "MAX")
+                    Text(vm.currentRank.nextRank?.rawValue ?? "MAX")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(currentRank.nextRank?.color ?? Color.white.opacity(0.3))
+                        .foregroundColor(vm.currentRank.nextRank?.color ?? Color.white.opacity(0.3))
                 }
 
                 GeometryReader { geo in
@@ -144,17 +142,17 @@ struct HomeView: View {
                         RoundedRectangle(cornerRadius: 6)
                             .fill(
                                 LinearGradient(
-                                    colors: [currentRank.color, currentRank.nextRank?.color ?? currentRank.color],
+                                    colors: [vm.currentRank.color, vm.currentRank.nextRank?.color ?? vm.currentRank.color],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
                             )
-                            .frame(width: geo.size.width * progress, height: 10)
+                            .frame(width: geo.size.width * vm.progress, height: 10)
                     }
                 }
                 .frame(height: 10)
 
-                Text("\(Int(progress * 100))% to \(currentRank.nextRank?.rawValue ?? "MAX")")
+                Text("\(Int(vm.progress * 100))% to \(vm.currentRank.nextRank?.rawValue ?? "MAX")")
                     .font(.system(size: 12))
                     .foregroundColor(.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -175,16 +173,16 @@ struct HomeView: View {
                     Circle()
                         .fill(Color.white.opacity(0.15))
                         .frame(width: 40, height: 40)
-                    Image(systemName: todayLogged ? "pencil" : "plus")
+                    Image(systemName: vm.todayLogged ? "pencil" : "plus")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(todayLogged ? "Edit Today's Lift" : "Log Today's Lift")
+                    Text(vm.todayLogged ? "Log Another Lift" : "Log Today's Lift")
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.white)
-                    Text(todayLogged ? "Tap to update your entry" : "Bench, Squat, or Deadlift")
+                    Text(vm.todayLogged ? "Keep the gains coming" : "Bench, Squat, or Deadlift")
                         .font(.system(size: 13))
                         .foregroundColor(Color.white.opacity(0.65))
                 }
@@ -207,24 +205,35 @@ struct HomeView: View {
 
     var statsRow: some View {
         HStack(spacing: 12) {
-            MiniStatCard(label: "XP", value: "\(xp)", symbolName: "star.fill", color: .accentOrange)
-            MiniStatCard(label: "Streak", value: "\(streak)d", symbolName: "flame.fill", color: .red)
-            MiniStatCard(label: "Lifts", value: "\(totalLifts)", symbolName: "dumbbell.fill", color: Color(red: 0.42, green: 0.76, blue: 1.00))
+            MiniStatCard(label: "XP", value: "\(vm.xp)", symbolName: "star.fill", color: .accentOrange)
+            MiniStatCard(label: "Streak", value: "\(vm.streak)d", symbolName: "flame.fill", color: .red)
+            MiniStatCard(label: "Lifts", value: "\(vm.totalLifts)", symbolName: "dumbbell.fill", color: Color(red: 0.42, green: 0.76, blue: 1.00))
         }
     }
 
     // MARK: - Recent Lifts
 
     var recentLiftsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Recent Lifts")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(.white)
+        Group {
+            if vm.recentLifts.isEmpty {
+                EmptyView()
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Recent Lifts")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.white)
 
-            VStack(spacing: 8) {
-                LiftHistoryRow(liftName: "Bench Press", weight: 185, reps: 5, xpGained: 35, label: "Today")
-                LiftHistoryRow(liftName: "Squat", weight: 225, reps: 3, xpGained: 10, label: "2d ago")
-                LiftHistoryRow(liftName: "Deadlift", weight: 275, reps: 4, xpGained: 35, label: "4d ago")
+                    VStack(spacing: 8) {
+                        ForEach(vm.recentLifts, id: \.id) { entry in
+                            LiftHistoryRow(
+                                liftName: entry.liftType,
+                                weight: Int(entry.weight),
+                                reps: entry.reps,
+                                label: vm.relativeLabel(for: entry)
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -275,7 +284,6 @@ struct LiftHistoryRow: View {
     let liftName: String
     let weight: Int
     let reps: Int
-    let xpGained: Int
     let label: String
 
     var body: some View {
@@ -291,14 +299,9 @@ struct LiftHistoryRow: View {
 
             Spacer()
 
-            VStack(alignment: .trailing, spacing: 4) {
-                Text("\(weight) lbs x \(reps)")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
-                Text("+\(xpGained) XP")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.accentOrange)
-            }
+            Text("\(weight) lbs x \(reps)")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
@@ -308,4 +311,5 @@ struct LiftHistoryRow: View {
 
 #Preview {
     HomeView(onLogTap: {}, onRankUp: { _ in })
+        .modelContainer(for: [UserProfile.self, LiftEntry.self, AppStats.self], inMemory: true)
 }
