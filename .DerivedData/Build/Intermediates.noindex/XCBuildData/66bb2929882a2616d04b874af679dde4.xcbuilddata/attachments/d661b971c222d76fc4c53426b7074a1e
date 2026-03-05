@@ -1,0 +1,49 @@
+{
+  "" : {
+    "diagnostics" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/No Limits-primary.dia",
+    "emit-module-dependencies" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/No Limits-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/No Limits-primary-emit-module.dia",
+    "pch" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/No Limits-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/No Limits-primary.swiftdeps"
+  },
+  "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "const-values" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftconstvalues",
+    "dependencies" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/GeneratedAssetSymbols.d",
+    "diagnostics" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/GeneratedAssetSymbols.dia",
+    "index-unit-output-path" : "/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/GeneratedAssetSymbols.bc",
+    "object" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "swift-dependencies" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftdeps",
+    "swiftmodule" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/GeneratedAssetSymbols~partial.swiftmodule"
+  },
+  "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/No Limits/ContentView.swift" : {
+    "const-values" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/ContentView.swiftconstvalues",
+    "dependencies" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/ContentView.d",
+    "diagnostics" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/ContentView.dia",
+    "index-unit-output-path" : "/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/ContentView.o",
+    "llvm-bc" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/ContentView.bc",
+    "object" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/ContentView.o",
+    "swift-dependencies" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/ContentView.swiftdeps",
+    "swiftmodule" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/ContentView~partial.swiftmodule"
+  },
+  "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/No Limits/Item.swift" : {
+    "const-values" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/Item.swiftconstvalues",
+    "dependencies" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/Item.d",
+    "diagnostics" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/Item.dia",
+    "index-unit-output-path" : "/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/Item.o",
+    "llvm-bc" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/Item.bc",
+    "object" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/Item.o",
+    "swift-dependencies" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/Item.swiftdeps",
+    "swiftmodule" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/Item~partial.swiftmodule"
+  },
+  "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/No Limits/No_LimitsApp.swift" : {
+    "const-values" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/No_LimitsApp.swiftconstvalues",
+    "dependencies" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/No_LimitsApp.d",
+    "diagnostics" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/No_LimitsApp.dia",
+    "index-unit-output-path" : "/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/No_LimitsApp.o",
+    "llvm-bc" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/No_LimitsApp.bc",
+    "object" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/No_LimitsApp.o",
+    "swift-dependencies" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/No_LimitsApp.swiftdeps",
+    "swiftmodule" : "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/.DerivedData/Build/Intermediates.noindex/No Limits.build/Debug-iphonesimulator/No Limits.build/Objects-normal/arm64/No_LimitsApp~partial.swiftmodule"
+  }
+}
