@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct RankUpView: View {
     let rank: Rank
@@ -86,7 +87,10 @@ struct RankUpView: View {
                 Spacer()
 
                 // Continue button
-                Button(action: onContinue) {
+                Button(action: {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    onContinue()
+                }) {
                     Text("Continue")
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.white)
@@ -108,6 +112,10 @@ struct RankUpView: View {
     }
 
     private func runEntranceAnimation() {
+        // Success haptic on rank-up
+        let notification = UINotificationFeedbackGenerator()
+        notification.notificationOccurred(.success)
+
         withAnimation(.spring(response: 0.55, dampingFraction: 0.65).delay(0.1)) {
             badgeScale = 1.0
             badgeOpacity = 1.0

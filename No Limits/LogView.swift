@@ -267,6 +267,10 @@ struct LogView: View {
         guard let result = vm.saveLift(context: modelContext) else { return }
         saveResult = result
 
+        // Haptic
+        let impact = UIImpactFeedbackGenerator(style: result.isNewPR ? .heavy : .medium)
+        impact.impactOccurred()
+
         // Show toast briefly, then dismiss
         withAnimation { showXPToast = true }
 

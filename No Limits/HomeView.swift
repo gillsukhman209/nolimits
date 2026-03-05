@@ -30,10 +30,15 @@ struct HomeView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
                     headerRow
-                    rankCard
-                    logButton
-                    statsRow
-                    recentLiftsSection
+
+                    if vm.totalLifts == 0 {
+                        emptyState
+                    } else {
+                        rankCard
+                        logButton
+                        statsRow
+                        recentLiftsSection
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 64)
@@ -41,6 +46,61 @@ struct HomeView: View {
             }
         }
         .onAppear { vm.refresh(context: modelContext) }
+    }
+
+    // MARK: - Empty State
+
+    var emptyState: some View {
+        VStack(spacing: 28) {
+            Spacer().frame(height: 40)
+
+            ZStack {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color.accentOrange.opacity(0.18), Color.clear],
+                            center: .center,
+                            startRadius: 10,
+                            endRadius: 70
+                        )
+                    )
+                    .frame(width: 140, height: 140)
+
+                Image(systemName: "dumbbell.fill")
+                    .font(.system(size: 52, weight: .semibold))
+                    .foregroundStyle(LinearGradient.accent)
+            }
+
+            VStack(spacing: 10) {
+                Text("No lifts yet")
+                    .font(.system(size: 28, weight: .black))
+                    .foregroundColor(.white)
+
+                Text("Log your first lift to see your\nstrength score and rank.")
+                    .font(.system(size: 16))
+                    .foregroundColor(.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+            }
+
+            Button(action: onLogTap) {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 18))
+                    Text("Log Your First Lift")
+                        .font(.system(size: 17, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 56)
+                .background(LinearGradient.accent)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
+
+            Spacer().frame(height: 20)
+        }
     }
 
     // MARK: - Header
