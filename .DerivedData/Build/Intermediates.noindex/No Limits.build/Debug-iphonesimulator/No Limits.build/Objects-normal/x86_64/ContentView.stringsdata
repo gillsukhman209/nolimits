@@ -1,0 +1,256 @@
+{
+  "source": "/Users/sukhmansingh/Desktop/Coding/2026/No Limits/No Limits/ContentView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Liftoff",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 170
+        }
+      },
+      {
+        "comment": "",
+        "key": "Set up in under 30 seconds",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 173
+        }
+      },
+      {
+        "comment": "",
+        "key": "Design prototype only. Purchase flow is mocked.",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 274
+        }
+      },
+      {
+        "comment": "",
+        "key": "Not now",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 267
+        }
+      },
+      {
+        "comment": "",
+        "key": "Unlock Liftoff",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 242
+        }
+      },
+      {
+        "comment": "",
+        "key": "Track one lift a day. Build momentum.",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 245
+        }
+      },
+      {
+        "comment": "",
+        "key": "Unlock to start",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 304
+        }
+      },
+      {
+        "comment": "",
+        "key": "Your dashboard is ready. Activate access to begin logging.",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 308
+        }
+      },
+      {
+        "comment": "",
+        "key": "Open settings",
+        "location": {
+          "startingColumn": 41,
+          "startingLine": 345
+        }
+      },
+      {
+        "comment": "",
+        "key": "Liftoff",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 334
+        }
+      },
+      {
+        "comment": "",
+        "key": "Today is a good day to lift.",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 337
+        }
+      },
+      {
+        "comment": "",
+        "key": "Today's Preview",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 357
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld lb x %lld",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 365
+        }
+      },
+      {
+        "comment": "",
+        "key": "Quick daily log",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 401
+        }
+      },
+      {
+        "comment": "",
+        "key": "Lift Type",
+        "location": {
+          "startingColumn": 32,
+          "startingLine": 408
+        }
+      },
+      {
+        "comment": "",
+        "key": "Mock feedback",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 424
+        }
+      },
+      {
+        "comment": "",
+        "key": "+35 XP  •  Streak +1 day",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 427
+        }
+      },
+      {
+        "comment": "",
+        "key": "Close",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 446
+        }
+      },
+      {
+        "comment": "",
+        "key": "Daily reminders",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 467
+        }
+      },
+      {
+        "comment": "",
+        "key": "Get nudged if you haven't logged today",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 470
+        }
+      },
+      {
+        "comment": "",
+        "key": "Reminder time",
+        "location": {
+          "startingColumn": 25,
+          "startingLine": 480
+        }
+      },
+      {
+        "comment": "",
+        "key": "Settings",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 496
+        }
+      },
+      {
+        "comment": "",
+        "key": "Done",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 501
+        }
+      },
+      {
+        "comment": "",
+        "key": "Rank Up",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 536
+        }
+      },
+      {
+        "comment": "",
+        "key": "You ranked up to %@",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 540
+        }
+      },
+      {
+        "comment": "",
+        "key": "Body metrics",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 622
+        }
+      },
+      {
+        "comment": "",
+        "key": "Used for your normalized rank design preview.",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 625
+        }
+      },
+      {
+        "comment": "",
+        "key": "Current Rank",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 647
+        }
+      },
+      {
+        "comment": "",
+        "key": "Progress to next rank",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 664
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 737
+        }
+      },
+      {
+        "comment": "",
+        "key": "Lift saved. +35 XP",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 863
+        }
+      }
+    ]
+  },
+  "version": 1
+}
