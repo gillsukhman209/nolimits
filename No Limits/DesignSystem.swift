@@ -63,10 +63,41 @@ enum Rank: String, CaseIterable, Equatable {
         }
     }
 
+    var lowerBound: Double {
+        switch self {
+        case .iron:     return 0
+        case .bronze:   return 0.60
+        case .silver:   return 0.80
+        case .gold:     return 1.00
+        case .platinum: return 1.20
+        case .diamond:  return 1.40
+        case .titan:    return 1.60
+        }
+    }
+
+    var upperBound: Double {
+        switch self {
+        case .iron:     return 0.60
+        case .bronze:   return 0.80
+        case .silver:   return 1.00
+        case .gold:     return 1.20
+        case .platinum: return 1.40
+        case .diamond:  return 1.60
+        case .titan:    return 10.0
+        }
+    }
+
     var nextRank: Rank? {
         let all = Rank.allCases
         guard let idx = all.firstIndex(of: self), idx + 1 < all.count else { return nil }
         return all[idx + 1]
+    }
+
+    static func fromScore(_ score: Double) -> Rank {
+        for rank in Rank.allCases.reversed() {
+            if score >= rank.lowerBound { return rank }
+        }
+        return .iron
     }
 }
 

@@ -16,7 +16,7 @@ enum AppScreen: Equatable {
 }
 
 struct ContentView: View {
-    @State private var screen: AppScreen = .onboarding
+    @State private var screen: AppScreen = .home
 
     var body: some View {
         ZStack {
