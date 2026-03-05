@@ -6,56 +6,63 @@
 //
 
 import SwiftUI
-import SwiftData
+
+enum AppScreen: Equatable {
+    case onboarding
+    case paywall
+    case home
+    case log
+    case rankUp(Rank)
+}
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+    @State private var screen: AppScreen = .onboarding
 
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
-                    }
-                }
-                .onDelete(perform: deleteItems)
-            }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
-            }
-        } detail: {
-            Text("Select an item")
+        ZStack {
+            Color.appBg.ignoresSafeArea()
+            screenContent
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    @ViewBuilder
+    private var screenContent: some View {
+        switch screen {
+        case .onboarding:
+            OnboardingView(onComplete: { navigate(to: .paywall) })
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .move(edge: .leading).combined(with: .opacity)
+                ))
+        case .paywall:
+            PaywallView(
+                onUnlock: { navigate(to: .home) },
+                onDismiss: { navigate(to: .home) }
+            )
+            .transition(.move(edge: .bottom))
+        case .home:
+            HomeView(
+                onLogTap: { navigate(to: .log) },
+                onRankUp: { rank in navigate(to: .rankUp(rank)) }
+            )
+            .transition(.opacity)
+        case .log:
+            LogView(onDismiss: { navigate(to: .home) })
+                .transition(.move(edge: .bottom))
+        case .rankUp(let rank):
+            RankUpView(rank: rank, onContinue: { navigate(to: .home) })
+                .transition(.opacity)
         }
     }
 
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
-            }
+    private func navigate(to destination: AppScreen) {
+        withAnimation(.easeInOut(duration: 0.35)) {
+            screen = destination
         }
     }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
 }
