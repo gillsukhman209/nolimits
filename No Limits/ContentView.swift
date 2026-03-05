@@ -48,8 +48,11 @@ struct ContentView: View {
             )
             .transition(.opacity)
         case .log:
-            LogView(onDismiss: { navigate(to: .home) })
-                .transition(.move(edge: .bottom))
+            LogView(
+                onDismiss: { navigate(to: .home) },
+                onRankUp: { rank in navigate(to: .rankUp(rank)) }
+            )
+            .transition(.move(edge: .bottom))
         case .rankUp(let rank):
             RankUpView(rank: rank, onContinue: { navigate(to: .home) })
                 .transition(.opacity)

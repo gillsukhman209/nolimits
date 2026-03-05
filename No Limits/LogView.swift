@@ -6,16 +6,21 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct LogView: View {
     let onDismiss: () -> Void
+    let onRankUp: ((Rank) -> Void)?
 
-    @State private var selectedLift = 0
-    @State private var weight = ""
-    @State private var reps = ""
-    @State private var saved = false
+    @Environment(\.modelContext) private var modelContext
+    @State private var vm = LogViewModel()
+    @State private var saveResult: SaveResult?
+    @State private var showXPToast = false
 
-    private let lifts = ["Bench", "Squat", "Deadlift"]
+    init(onDismiss: @escaping () -> Void, onRankUp: ((Rank) -> Void)? = nil) {
+        self.onDismiss = onDismiss
+        self.onRankUp = onRankUp
+    }
 
     var body: some View {
         ZStack {
@@ -31,7 +36,7 @@ struct LogView: View {
                         weightInput
                         repsInput
 
-                        if !weight.isEmpty && !reps.isEmpty {
+                        if !vm.weight.isEmpty && !vm.reps.isEmpty {
                             scorePreview
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
@@ -40,11 +45,22 @@ struct LogView: View {
                     .padding(.top, 36)
                     .padding(.bottom, 24)
                 }
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: weight.isEmpty || reps.isEmpty)
+                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: vm.weight.isEmpty || vm.reps.isEmpty)
 
                 saveButton
                     .padding(.horizontal, 24)
                     .padding(.bottom, 48)
+            }
+
+            // XP toast overlay
+            if showXPToast, let result = saveResult {
+                VStack {
+                    Spacer()
+                    xpToast(result: result)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .padding(.bottom, 120)
+                }
+                .animation(.spring(response: 0.4, dampingFraction: 0.75), value: showXPToast)
             }
         }
     }
@@ -84,13 +100,13 @@ struct LogView: View {
             sectionLabel("LIFT TYPE")
 
             HStack(spacing: 10) {
-                ForEach(lifts.indices, id: \.self) { i in
+                ForEach(vm.liftOptions.indices, id: \.self) { i in
                     LiftTypeChip(
-                        title: lifts[i],
-                        isSelected: selectedLift == i,
+                        title: vm.liftOptions[i],
+                        isSelected: vm.selectedLiftIndex == i,
                         action: {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                selectedLift = i
+                                vm.selectedLiftIndex = i
                             }
                         }
                     )
@@ -106,7 +122,7 @@ struct LogView: View {
             sectionLabel("WEIGHT")
 
             HStack(alignment: .lastTextBaseline, spacing: 8) {
-                TextField("0", text: $weight)
+                TextField("0", text: $vm.weight)
                     .font(.system(size: 56, weight: .black, design: .rounded))
                     .foregroundColor(.white)
                     .keyboardType(.numberPad)
@@ -129,7 +145,7 @@ struct LogView: View {
             sectionLabel("REPS")
 
             HStack(alignment: .lastTextBaseline, spacing: 8) {
-                TextField("0", text: $reps)
+                TextField("0", text: $vm.reps)
                     .font(.system(size: 56, weight: .black, design: .rounded))
                     .foregroundColor(.white)
                     .keyboardType(.numberPad)
@@ -148,9 +164,7 @@ struct LogView: View {
     // MARK: - Score Preview
 
     var scorePreview: some View {
-        let w = Double(weight) ?? 0
-        let r = Double(reps) ?? 0
-        let e1rm = w * (1 + r / 30)
+        let e1rm = vm.currentE1RM
 
         return HStack {
             VStack(alignment: .leading, spacing: 4) {
@@ -189,7 +203,7 @@ struct LogView: View {
     var saveButton: some View {
         Button(action: handleSave) {
             HStack(spacing: 10) {
-                if saved {
+                if vm.saved {
                     Image(systemName: "checkmark")
                         .font(.system(size: 18, weight: .bold))
                 } else {
@@ -204,24 +218,69 @@ struct LogView: View {
             .frame(height: 56)
             .background(
                 Group {
-                    if saved {
+                    if vm.saved {
                         Color.green.opacity(0.75)
                     } else {
-                        LinearGradient.accent.opacity(canSave ? 1 : 0.35)
+                        LinearGradient.accent.opacity(vm.canSave ? 1 : 0.35)
                     }
                 }
             )
             .clipShape(RoundedRectangle(cornerRadius: 16))
         }
-        .disabled(!canSave)
-        .animation(.easeInOut(duration: 0.2), value: saved)
+        .disabled(!vm.canSave)
+        .animation(.easeInOut(duration: 0.2), value: vm.saved)
     }
 
-    var canSave: Bool { !weight.isEmpty && !reps.isEmpty && !saved }
+    // MARK: - XP Toast
+
+    func xpToast(result: SaveResult) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: result.isNewPR ? "trophy.fill" : "star.fill")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(LinearGradient.accent)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(result.isNewPR ? "New PR!" : "Lift Saved")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.white)
+                Text("+\(result.xpEarned) XP")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.accentOrange)
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(Color.cardBg)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(Color.accentOrange.opacity(0.4), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .padding(.horizontal, 24)
+    }
+
+    // MARK: - Save Logic
 
     func handleSave() {
-        withAnimation { saved = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { onDismiss() }
+        guard let result = vm.saveLift(context: modelContext) else { return }
+        saveResult = result
+
+        // Show toast briefly, then dismiss
+        withAnimation { showXPToast = true }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            withAnimation { showXPToast = false }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                if result.didRankUp {
+                    onRankUp?(result.newRank)
+                } else {
+                    onDismiss()
+                }
+            }
+        }
     }
 
     // MARK: - Helper
@@ -269,4 +328,5 @@ struct LiftTypeChip: View {
 
 #Preview {
     LogView(onDismiss: {})
+        .modelContainer(for: [UserProfile.self, LiftEntry.self, AppStats.self], inMemory: true)
 }
