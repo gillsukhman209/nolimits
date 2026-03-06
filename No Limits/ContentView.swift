@@ -40,7 +40,7 @@ struct ContentView: View {
                 onUnlock: { navigate(to: .home) },
                 onDismiss: { navigate(to: .home) }
             )
-            .transition(.move(edge: .bottom))
+            .transition(.move(edge: .bottom).combined(with: .opacity))
         case .home:
             HomeView(
                 onLogTap: { navigate(to: .log) },
@@ -52,15 +52,21 @@ struct ContentView: View {
                 onDismiss: { navigate(to: .home) },
                 onRankUp: { rank, muscle in navigate(to: .rankUp(rank, muscle)) }
             )
-            .transition(.move(edge: .bottom))
+            .transition(.asymmetric(
+                insertion: .move(edge: .bottom).combined(with: .opacity),
+                removal: .move(edge: .bottom).combined(with: .opacity)
+            ))
         case .rankUp(let rank, let muscle):
             RankUpView(rank: rank, muscleGroup: muscle, onContinue: { navigate(to: .home) })
-                .transition(.opacity)
+                .transition(.asymmetric(
+                    insertion: .scale(scale: 0.9).combined(with: .opacity),
+                    removal: .opacity
+                ))
         }
     }
 
     private func navigate(to destination: AppScreen) {
-        withAnimation(.easeInOut(duration: 0.35)) {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
             screen = destination
         }
     }
