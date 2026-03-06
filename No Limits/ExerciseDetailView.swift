@@ -369,6 +369,13 @@ struct ExerciseDetailView: View {
                         RoundedRectangle(cornerRadius: 10)
                             .strokeBorder(Color.cardBorder, lineWidth: 1)
                     )
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            deleteEntry(entry)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
                 }
             }
         }
@@ -421,6 +428,31 @@ struct ExerciseDetailView: View {
             )
         }
         .sorted { $0.weight > $1.weight } // heaviest first
+    }
+
+    private func deleteEntry(_ entry: LiftEntry) {
+        let muscle = entry.muscleGroup
+        modelContext.delete(entry)
+
+        // Update totalLifts
+        if let stats = try? modelContext.fetch(FetchDescriptor<AppStats>()).first {
+            stats.totalLifts = max(stats.totalLifts - 1, 0)
+
+            // Recalculate best e1RM for this muscle group from remaining entries
+            if let muscle = muscle {
+                let muscleName = muscle.rawValue
+                var desc = FetchDescriptor<LiftEntry>(
+                    predicate: #Predicate<LiftEntry> { $0.muscleGroupRaw == muscleName }
+                )
+                desc.fetchLimit = 500
+                let remaining = (try? modelContext.fetch(desc)) ?? []
+                let newBest = remaining.map(\.e1RM).max() ?? 0
+                stats.setBestE1RM(for: muscle, value: newBest)
+            }
+        }
+
+        try? modelContext.save()
+        loadData()
     }
 
     private func formattedDate(_ date: Date) -> String {

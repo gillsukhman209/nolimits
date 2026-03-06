@@ -373,6 +373,13 @@ struct HomeView: View {
                         )
                     }
                     .buttonStyle(.plain)
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            deleteLift(entry)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
                 }
             }
         }
@@ -398,6 +405,31 @@ struct HomeView: View {
         }
         .buttonStyle(.plain)
         .padding(.bottom, 36)
+    }
+
+    // MARK: - Delete Lift
+
+    private func deleteLift(_ entry: LiftEntry) {
+        let muscle = entry.muscleGroup
+        modelContext.delete(entry)
+
+        if let stats = try? modelContext.fetch(FetchDescriptor<AppStats>()).first {
+            stats.totalLifts = max(stats.totalLifts - 1, 0)
+
+            if let muscle = muscle {
+                let muscleName = muscle.rawValue
+                var desc = FetchDescriptor<LiftEntry>(
+                    predicate: #Predicate<LiftEntry> { $0.muscleGroupRaw == muscleName }
+                )
+                desc.fetchLimit = 500
+                let remaining = (try? modelContext.fetch(desc)) ?? []
+                let newBest = remaining.map(\.e1RM).max() ?? 0
+                stats.setBestE1RM(for: muscle, value: newBest)
+            }
+        }
+
+        try? modelContext.save()
+        vm.refresh(context: modelContext)
     }
 
     // MARK: - Greeting
