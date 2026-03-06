@@ -10,6 +10,7 @@ import UIKit
 
 struct RankUpView: View {
     let rank: Rank
+    let muscleGroup: MuscleGroup
     let onContinue: () -> Void
 
     @State private var badgeScale: CGFloat = 0.4
@@ -36,7 +37,6 @@ struct RankUpView: View {
 
                 // Badge
                 ZStack {
-                    // Outer ring pulse
                     Circle()
                         .strokeBorder(rank.color.opacity(0.2), lineWidth: 1)
                         .frame(width: 180, height: 180)
@@ -76,7 +76,7 @@ struct RankUpView: View {
                         .font(.system(size: 54, weight: .black))
                         .foregroundColor(.white)
 
-                    Text("You've earned your rank.\nKeep pushing.")
+                    Text("Your \(muscleGroup.rawValue) ranked up.\nKeep pushing.")
                         .font(.system(size: 16))
                         .foregroundColor(.textSecondary)
                         .multilineTextAlignment(.center)
@@ -112,7 +112,6 @@ struct RankUpView: View {
     }
 
     private func runEntranceAnimation() {
-        // Success haptic on rank-up
         let notification = UINotificationFeedbackGenerator()
         notification.notificationOccurred(.success)
 
@@ -132,5 +131,5 @@ struct RankUpView: View {
 }
 
 #Preview {
-    RankUpView(rank: .gold, onContinue: {})
+    RankUpView(rank: .gold, muscleGroup: .chest, onContinue: {})
 }

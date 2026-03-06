@@ -8,12 +8,27 @@
 import Foundation
 import SwiftData
 
+struct MuscleRankInfo: Identifiable {
+    let muscle: MuscleGroup
+    let rank: Rank
+    let score: Double
+    let progress: Double
+    var id: String { muscle.rawValue }
+}
+
 @Observable
 final class HomeViewModel {
 
-    var currentRank: Rank = .iron
-    var score: Double = 0
-    var progress: Double = 0
+    // Overall
+    var overallRank: Rank = .iron
+    var overallScore: Double = 0
+    var overallProgress: Double = 0
+
+    // Per-muscle
+    var muscleRanks: [MuscleGroup: Rank] = [:]
+    var muscleRankList: [MuscleRankInfo] = []
+
+    // Stats
     var streak: Int = 0
     var xp: Int = 0
     var totalLifts: Int = 0
@@ -21,64 +36,65 @@ final class HomeViewModel {
     var recentLifts: [LiftEntry] = []
 
     func refresh(context: ModelContext) {
-        // Fetch profile
-        guard let profile = try? context.fetch(FetchDescriptor<UserProfile>()).first else { return }
+        guard let profile = try? context.fetch(FetchDescriptor<UserProfile>()).first,
+              let stats = try? context.fetch(FetchDescriptor<AppStats>()).first else { return }
 
-        // Fetch stats
-        guard let stats = try? context.fetch(FetchDescriptor<AppStats>()).first else { return }
+        // Per-muscle ranks
+        var ranks: [MuscleGroup: Rank] = [:]
+        var infos: [MuscleRankInfo] = []
+        var totalScore: Double = 0
+        var trainedCount = 0
 
-        // Recalculate streak in case days have passed since last open
-        let freshStreak: Int
-        if let lastDate = stats.lastLoggedDate {
-            let calendar = Calendar.current
-            if calendar.isDateInToday(lastDate) {
-                freshStreak = stats.streak
-            } else if calendar.isDateInYesterday(lastDate) {
-                freshStreak = stats.streak // streak still alive, hasn't logged yet today
-            } else {
-                freshStreak = 0 // streak broken
+        for muscle in MuscleGroup.allCases {
+            let best = stats.bestE1RM(for: muscle)
+            let score = RankingService.calculateScore(e1RM: best, bodyweight: profile.bodyweight)
+            let rank = Rank.fromScore(score)
+            let prog = RankingService.progress(score: score, rank: rank)
+            ranks[muscle] = rank
+            infos.append(MuscleRankInfo(muscle: muscle, rank: rank, score: score, progress: prog))
+            if best > 0 {
+                totalScore += score
+                trainedCount += 1
             }
-        } else {
-            freshStreak = 0
         }
 
-        // Score from best overall e1RM
-        let bestE1RM = stats.bestOverallE1RM
-        let computedScore = RankingService.calculateScore(e1RM: bestE1RM, bodyweight: profile.bodyweight)
-        let rank = Rank.fromScore(computedScore)
+        self.muscleRanks = ranks
+        self.muscleRankList = infos
 
-        // Today's lifts
-        let calendar = Calendar.current
-        let startOfToday = calendar.startOfDay(for: .now)
+        // Overall = average score of trained muscles
+        let avgScore = trainedCount > 0 ? totalScore / Double(trainedCount) : 0
+        self.overallRank = Rank.fromScore(avgScore)
+        self.overallScore = avgScore
+        self.overallProgress = RankingService.progress(score: avgScore, rank: overallRank)
 
-        // Recent lifts (last 10, sorted newest first)
-        var recentDescriptor = FetchDescriptor<LiftEntry>(
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
-        )
-        recentDescriptor.fetchLimit = 10
-        let recent = (try? context.fetch(recentDescriptor)) ?? []
+        // Streak (recalculate in case days passed)
+        if let lastDate = stats.lastLoggedDate {
+            let cal = Calendar.current
+            if cal.isDateInToday(lastDate) || cal.isDateInYesterday(lastDate) {
+                self.streak = stats.streak
+            } else {
+                self.streak = 0
+            }
+        } else {
+            self.streak = 0
+        }
 
-        let todayEntries = recent.filter { calendar.isDateInToday($0.date) }
-
-        // Update published state
-        self.currentRank = rank
-        self.score = computedScore
-        self.progress = RankingService.progress(score: computedScore, rank: rank)
-        self.streak = freshStreak
         self.xp = stats.xp
         self.totalLifts = stats.totalLifts
-        self.todayLogged = !todayEntries.isEmpty
+
+        // Recent lifts
+        var desc = FetchDescriptor<LiftEntry>(sortBy: [SortDescriptor(\.date, order: .reverse)])
+        desc.fetchLimit = 10
+        let recent = (try? context.fetch(desc)) ?? []
         self.recentLifts = recent
+        self.todayLogged = recent.contains { Calendar.current.isDateInToday($0.date) }
     }
 
-    // MARK: - Helpers for display
-
     func relativeLabel(for entry: LiftEntry) -> String {
-        let calendar = Calendar.current
-        if calendar.isDateInToday(entry.date) { return "Today" }
-        if calendar.isDateInYesterday(entry.date) { return "Yesterday" }
-
-        let days = calendar.dateComponents([.day], from: entry.date, to: .now).day ?? 0
+        let cal = Calendar.current
+        if cal.isDateInToday(entry.date) { return "Today" }
+        if cal.isDateInYesterday(entry.date) { return "Yesterday" }
+        let days = cal.dateComponents([.day], from: entry.date, to: .now).day ?? 0
         return "\(days)d ago"
     }
 }

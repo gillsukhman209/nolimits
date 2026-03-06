@@ -7,17 +7,19 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct LogView: View {
     let onDismiss: () -> Void
-    let onRankUp: ((Rank) -> Void)?
+    let onRankUp: ((Rank, MuscleGroup) -> Void)?
 
     @Environment(\.modelContext) private var modelContext
     @State private var vm = LogViewModel()
     @State private var saveResult: SaveResult?
     @State private var showXPToast = false
+    @State private var showExercisePicker = false
 
-    init(onDismiss: @escaping () -> Void, onRankUp: ((Rank) -> Void)? = nil) {
+    init(onDismiss: @escaping () -> Void, onRankUp: ((Rank, MuscleGroup) -> Void)? = nil) {
         self.onDismiss = onDismiss
         self.onRankUp = onRankUp
     }
@@ -32,7 +34,7 @@ struct LogView: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 28) {
-                        liftTypePicker
+                        exerciseSelector
                         weightInput
                         repsInput
 
@@ -52,7 +54,6 @@ struct LogView: View {
                     .padding(.bottom, 48)
             }
 
-            // XP toast overlay
             if showXPToast, let result = saveResult {
                 VStack {
                     Spacer()
@@ -62,6 +63,11 @@ struct LogView: View {
                 }
                 .animation(.spring(response: 0.4, dampingFraction: 0.75), value: showXPToast)
             }
+        }
+        .sheet(isPresented: $showExercisePicker) {
+            ExercisePickerSheet(selected: $vm.selectedExercise)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -79,54 +85,57 @@ struct LogView: View {
                         .foregroundColor(Color.white.opacity(0.65))
                 }
             }
-
             Spacer()
-
             Text("Log Lift")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundColor(.white)
-
             Spacer()
-
             Color.clear.frame(width: 38, height: 38)
         }
         .padding(.horizontal, 24)
     }
 
-    // MARK: - Lift Type Picker
+    // MARK: - Exercise Selector
 
-    var liftTypePicker: some View {
+    var exerciseSelector: some View {
         VStack(alignment: .leading, spacing: 14) {
-            sectionLabel("LIFT TYPE")
+            sectionLabel("EXERCISE")
 
-            HStack(spacing: 10) {
-                ForEach(vm.liftOptions.indices, id: \.self) { i in
-                    LiftTypeChip(
-                        title: vm.liftOptions[i],
-                        isSelected: vm.selectedLiftIndex == i,
-                        action: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                vm.selectedLiftIndex = i
-                            }
+            Button(action: { showExercisePicker = true }) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(vm.selectedExercise?.name ?? "Choose exercise")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(.white)
+                        if let muscle = vm.selectedExercise?.muscleGroup {
+                            Text(muscle.rawValue)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.accentOrange)
                         }
-                    )
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.textSecondary)
                 }
+                .padding(.horizontal, 22)
+                .padding(.vertical, 18)
+                .cardStyle(cornerRadius: 16)
             }
+            .buttonStyle(.plain)
         }
     }
 
-    // MARK: - Weight Input
+    // MARK: - Weight / Reps
 
     var weightInput: some View {
         VStack(alignment: .leading, spacing: 14) {
             sectionLabel("WEIGHT")
-
             HStack(alignment: .lastTextBaseline, spacing: 8) {
                 TextField("0", text: $vm.weight)
                     .font(.system(size: 56, weight: .black, design: .rounded))
                     .foregroundColor(.white)
                     .keyboardType(.numberPad)
-
                 Text("lbs")
                     .font(.system(size: 20, weight: .medium))
                     .foregroundColor(Color.white.opacity(0.35))
@@ -138,18 +147,14 @@ struct LogView: View {
         }
     }
 
-    // MARK: - Reps Input
-
     var repsInput: some View {
         VStack(alignment: .leading, spacing: 14) {
             sectionLabel("REPS")
-
             HStack(alignment: .lastTextBaseline, spacing: 8) {
                 TextField("0", text: $vm.reps)
                     .font(.system(size: 56, weight: .black, design: .rounded))
                     .foregroundColor(.white)
                     .keyboardType(.numberPad)
-
                 Text("reps")
                     .font(.system(size: 20, weight: .medium))
                     .foregroundColor(Color.white.opacity(0.35))
@@ -164,27 +169,23 @@ struct LogView: View {
     // MARK: - Score Preview
 
     var scorePreview: some View {
-        let e1rm = vm.currentE1RM
-
-        return HStack {
+        HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Estimated 1RM")
                     .font(.system(size: 12))
                     .foregroundColor(.textSecondary)
-                Text("\(Int(e1rm)) lbs")
+                Text("\(Int(vm.currentE1RM)) lbs")
                     .font(.system(size: 24, weight: .black, design: .rounded))
                     .foregroundColor(.white)
             }
-
             Spacer()
-
             VStack(alignment: .trailing, spacing: 4) {
-                Text("XP Reward")
+                Text("Targets")
                     .font(.system(size: 12))
                     .foregroundColor(.textSecondary)
-                Text("+10 XP")
-                    .font(.system(size: 24, weight: .black, design: .rounded))
-                    .foregroundStyle(LinearGradient.accent)
+                Text(vm.selectedExercise?.muscleGroup.rawValue ?? "")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.accentOrange)
             }
         }
         .padding(20)
@@ -238,26 +239,19 @@ struct LogView: View {
             Image(systemName: result.isNewPR ? "trophy.fill" : "star.fill")
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(LinearGradient.accent)
-
             VStack(alignment: .leading, spacing: 2) {
-                Text(result.isNewPR ? "New PR!" : "Lift Saved")
+                Text(result.isNewPR ? "New \(result.muscleGroup.rawValue) PR!" : "Lift Saved")
                     .font(.system(size: 15, weight: .bold))
                     .foregroundColor(.white)
                 Text("+\(result.xpEarned) XP")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.accentOrange)
             }
-
             Spacer()
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
-        .background(Color.cardBg)
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(Color.accentOrange.opacity(0.4), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .cardStyle(cornerRadius: 14)
         .padding(.horizontal, 24)
     }
 
@@ -267,27 +261,22 @@ struct LogView: View {
         guard let result = vm.saveLift(context: modelContext) else { return }
         saveResult = result
 
-        // Haptic
         let impact = UIImpactFeedbackGenerator(style: result.isNewPR ? .heavy : .medium)
         impact.impactOccurred()
 
-        // Show toast briefly, then dismiss
         withAnimation { showXPToast = true }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
             withAnimation { showXPToast = false }
-
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 if result.didRankUp {
-                    onRankUp?(result.newRank)
+                    onRankUp?(result.newRank, result.muscleGroup)
                 } else {
                     onDismiss()
                 }
             }
         }
     }
-
-    // MARK: - Helper
 
     func sectionLabel(_ text: String) -> some View {
         Text(text)
@@ -297,36 +286,61 @@ struct LogView: View {
     }
 }
 
-// MARK: - Lift Type Chip
+// MARK: - Exercise Picker Sheet
 
-struct LiftTypeChip: View {
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
+struct ExercisePickerSheet: View {
+    @Binding var selected: Exercise?
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(isSelected ? .white : Color.white.opacity(0.5))
-                .frame(maxWidth: .infinity)
-                .frame(height: 48)
-                .background(
-                    Group {
-                        if isSelected {
-                            LinearGradient.accent
-                        } else {
-                            Color.cardBg
+        ZStack {
+            Color.appBg.ignoresSafeArea()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    Text("Choose Exercise")
+                        .font(.system(size: 28, weight: .black))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 24)
+
+                    ForEach(ExerciseCatalog.grouped, id: \.0) { group, exercises in
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(group.rawValue.uppercased())
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.accentOrange)
+                                .tracking(2)
+                                .padding(.horizontal, 24)
+
+                            VStack(spacing: 4) {
+                                ForEach(exercises) { exercise in
+                                    Button(action: {
+                                        selected = exercise
+                                        dismiss()
+                                    }) {
+                                        HStack {
+                                            Text(exercise.name)
+                                                .font(.system(size: 16, weight: .medium))
+                                                .foregroundColor(.white)
+                                            Spacer()
+                                            if selected?.name == exercise.name {
+                                                Image(systemName: "checkmark.circle.fill")
+                                                    .font(.system(size: 18))
+                                                    .foregroundStyle(LinearGradient.accent)
+                                            }
+                                        }
+                                        .padding(.horizontal, 24)
+                                        .padding(.vertical, 14)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
                         }
                     }
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(isSelected ? Color.clear : Color.cardBorder, lineWidth: 1)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .padding(.bottom, 40)
+            }
         }
-        .buttonStyle(.plain)
     }
 }
 

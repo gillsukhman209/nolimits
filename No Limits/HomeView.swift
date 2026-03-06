@@ -10,7 +10,7 @@ import SwiftData
 
 struct HomeView: View {
     let onLogTap: () -> Void
-    let onRankUp: (Rank) -> Void
+    let onRankUp: (Rank, MuscleGroup) -> Void
 
     @Environment(\.modelContext) private var modelContext
     @State private var vm = HomeViewModel()
@@ -21,7 +21,7 @@ struct HomeView: View {
 
             // Ambient glow behind rank badge
             Circle()
-                .fill(vm.currentRank.color.opacity(0.12))
+                .fill(vm.overallRank.color.opacity(0.12))
                 .frame(width: 320, height: 320)
                 .blur(radius: 60)
                 .offset(y: 100)
@@ -34,8 +34,10 @@ struct HomeView: View {
                     if vm.totalLifts == 0 {
                         emptyState
                     } else {
-                        rankCard
+                        overallRankCard
+                        bodyMapSection
                         logButton
+                        muscleRanksList
                         statsRow
                         recentLiftsSection
                     }
@@ -139,42 +141,41 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Rank Card
+    // MARK: - Overall Rank Card
 
-    var rankCard: some View {
+    var overallRankCard: some View {
         VStack(spacing: 0) {
-            // Emblem
             VStack(spacing: 18) {
                 ZStack {
                     Circle()
-                        .fill(vm.currentRank.color.opacity(0.12))
+                        .fill(vm.overallRank.color.opacity(0.12))
                         .frame(width: 108, height: 108)
                     Circle()
                         .strokeBorder(
                             LinearGradient(
-                                colors: [vm.currentRank.color, vm.currentRank.color.opacity(0.25)],
+                                colors: [vm.overallRank.color, vm.overallRank.color.opacity(0.25)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
                             lineWidth: 1.5
                         )
                         .frame(width: 108, height: 108)
-                    Image(systemName: vm.currentRank.symbolName)
+                    Image(systemName: vm.overallRank.symbolName)
                         .font(.system(size: 42, weight: .semibold))
-                        .foregroundColor(vm.currentRank.color)
+                        .foregroundColor(vm.overallRank.color)
                 }
 
                 VStack(spacing: 4) {
-                    Text(vm.currentRank.rawValue.uppercased())
+                    Text(vm.overallRank.rawValue.uppercased())
                         .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .foregroundColor(vm.currentRank.color)
+                        .foregroundColor(vm.overallRank.color)
                         .tracking(3.5)
 
-                    Text(String(format: "%.2f", vm.score))
+                    Text(String(format: "%.2f", vm.overallScore))
                         .font(.system(size: 58, weight: .black, design: .rounded))
                         .foregroundColor(.white)
 
-                    Text("Strength Score")
+                    Text("Overall Strength Score")
                         .font(.system(size: 13))
                         .foregroundColor(.textSecondary)
                 }
@@ -184,13 +185,13 @@ struct HomeView: View {
             // Progress bar
             VStack(spacing: 10) {
                 HStack {
-                    Text(vm.currentRank.rawValue)
+                    Text(vm.overallRank.rawValue)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(vm.currentRank.color)
+                        .foregroundColor(vm.overallRank.color)
                     Spacer()
-                    Text(vm.currentRank.nextRank?.rawValue ?? "MAX")
+                    Text(vm.overallRank.nextRank?.rawValue ?? "MAX")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(vm.currentRank.nextRank?.color ?? Color.white.opacity(0.3))
+                        .foregroundColor(vm.overallRank.nextRank?.color ?? Color.white.opacity(0.3))
                 }
 
                 GeometryReader { geo in
@@ -202,17 +203,17 @@ struct HomeView: View {
                         RoundedRectangle(cornerRadius: 6)
                             .fill(
                                 LinearGradient(
-                                    colors: [vm.currentRank.color, vm.currentRank.nextRank?.color ?? vm.currentRank.color],
+                                    colors: [vm.overallRank.color, vm.overallRank.nextRank?.color ?? vm.overallRank.color],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
                             )
-                            .frame(width: geo.size.width * vm.progress, height: 10)
+                            .frame(width: geo.size.width * vm.overallProgress, height: 10)
                     }
                 }
                 .frame(height: 10)
 
-                Text("\(Int(vm.progress * 100))% to \(vm.currentRank.nextRank?.rawValue ?? "MAX")")
+                Text("\(Int(vm.overallProgress * 100))% to \(vm.overallRank.nextRank?.rawValue ?? "MAX")")
                     .font(.system(size: 12))
                     .foregroundColor(.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -222,6 +223,22 @@ struct HomeView: View {
             .padding(.bottom, 32)
         }
         .cardStyle(cornerRadius: 24)
+    }
+
+    // MARK: - Body Map
+
+    var bodyMapSection: some View {
+        VStack(spacing: 16) {
+            Text("Muscle Map")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            BodyMapView(muscleRanks: vm.muscleRanks)
+                .frame(height: 420)
+        }
+        .padding(.vertical, 20)
+        .cardStyle(cornerRadius: 20)
     }
 
     // MARK: - Log Button
@@ -242,7 +259,7 @@ struct HomeView: View {
                     Text(vm.todayLogged ? "Log Another Lift" : "Log Today's Lift")
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.white)
-                    Text(vm.todayLogged ? "Keep the gains coming" : "Bench, Squat, or Deadlift")
+                    Text(vm.todayLogged ? "Keep the gains coming" : "Pick an exercise and go")
                         .font(.system(size: 13))
                         .foregroundColor(Color.white.opacity(0.65))
                 }
@@ -259,6 +276,22 @@ struct HomeView: View {
             .clipShape(RoundedRectangle(cornerRadius: 18))
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Muscle Ranks List
+
+    var muscleRanksList: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Muscle Ranks")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(.white)
+
+            VStack(spacing: 8) {
+                ForEach(vm.muscleRankList) { info in
+                    MuscleRankRow(info: info)
+                }
+            }
+        }
     }
 
     // MARK: - Stats Row
@@ -289,7 +322,8 @@ struct HomeView: View {
                                 liftName: entry.liftType,
                                 weight: Int(entry.weight),
                                 reps: entry.reps,
-                                label: vm.relativeLabel(for: entry)
+                                label: vm.relativeLabel(for: entry),
+                                muscleGroup: entry.muscleGroup
                             )
                         }
                     }
@@ -307,6 +341,55 @@ struct HomeView: View {
         case 12..<17: return "Good afternoon"
         default:      return "Good evening"
         }
+    }
+}
+
+// MARK: - Muscle Rank Row
+
+struct MuscleRankRow: View {
+    let info: MuscleRankInfo
+
+    var body: some View {
+        HStack(spacing: 14) {
+            // Rank icon
+            ZStack {
+                Circle()
+                    .fill(info.rank.color.opacity(0.15))
+                    .frame(width: 38, height: 38)
+                Image(systemName: info.rank.symbolName)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(info.rank.color)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(info.muscle.rawValue)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                    Spacer()
+                    Text(info.rank.rawValue)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(info.rank.color)
+                }
+
+                // Progress bar
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.white.opacity(0.08))
+                            .frame(height: 6)
+
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(info.rank.color)
+                            .frame(width: geo.size.width * info.progress, height: 6)
+                    }
+                }
+                .frame(height: 6)
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .cardStyle(cornerRadius: 14)
     }
 }
 
@@ -345,6 +428,7 @@ struct LiftHistoryRow: View {
     let weight: Int
     let reps: Int
     let label: String
+    var muscleGroup: MuscleGroup? = nil
 
     var body: some View {
         HStack {
@@ -352,9 +436,16 @@ struct LiftHistoryRow: View {
                 Text(liftName)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
-                Text(label)
-                    .font(.system(size: 12))
-                    .foregroundColor(.textSecondary)
+                HStack(spacing: 6) {
+                    if let muscle = muscleGroup {
+                        Text(muscle.rawValue)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.accentOrange)
+                    }
+                    Text(label)
+                        .font(.system(size: 12))
+                        .foregroundColor(.textSecondary)
+                }
             }
 
             Spacer()
@@ -370,6 +461,6 @@ struct LiftHistoryRow: View {
 }
 
 #Preview {
-    HomeView(onLogTap: {}, onRankUp: { _ in })
+    HomeView(onLogTap: {}, onRankUp: { _, _ in })
         .modelContainer(for: [UserProfile.self, LiftEntry.self, AppStats.self], inMemory: true)
 }

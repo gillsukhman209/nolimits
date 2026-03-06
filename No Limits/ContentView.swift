@@ -12,7 +12,7 @@ enum AppScreen: Equatable {
     case paywall
     case home
     case log
-    case rankUp(Rank)
+    case rankUp(Rank, MuscleGroup)
 }
 
 struct ContentView: View {
@@ -44,17 +44,17 @@ struct ContentView: View {
         case .home:
             HomeView(
                 onLogTap: { navigate(to: .log) },
-                onRankUp: { rank in navigate(to: .rankUp(rank)) }
+                onRankUp: { rank, muscle in navigate(to: .rankUp(rank, muscle)) }
             )
             .transition(.opacity)
         case .log:
             LogView(
                 onDismiss: { navigate(to: .home) },
-                onRankUp: { rank in navigate(to: .rankUp(rank)) }
+                onRankUp: { rank, muscle in navigate(to: .rankUp(rank, muscle)) }
             )
             .transition(.move(edge: .bottom))
-        case .rankUp(let rank):
-            RankUpView(rank: rank, onContinue: { navigate(to: .home) })
+        case .rankUp(let rank, let muscle):
+            RankUpView(rank: rank, muscleGroup: muscle, onContinue: { navigate(to: .home) })
                 .transition(.opacity)
         }
     }

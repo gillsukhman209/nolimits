@@ -11,6 +11,7 @@ import SwiftData
 struct SaveResult {
     let xpEarned: Int
     let isNewPR: Bool
+    let muscleGroup: MuscleGroup
     let newRank: Rank
     let previousRank: Rank
     var didRankUp: Bool { newRank != previousRank }
@@ -19,17 +20,12 @@ struct SaveResult {
 @Observable
 final class LogViewModel {
 
-    // Form state
-    var selectedLiftIndex = 0
+    var selectedExercise: Exercise? = ExerciseCatalog.all.first
     var weight = ""
     var reps = ""
     var saved = false
 
-    let liftOptions = ["Bench", "Squat", "Deadlift", "OHP", "Barbell Row"]
-
-    var selectedLiftName: String { liftOptions[selectedLiftIndex] }
-
-    var canSave: Bool { !weight.isEmpty && !reps.isEmpty && !saved }
+    var canSave: Bool { !weight.isEmpty && !reps.isEmpty && !saved && selectedExercise != nil }
 
     var currentE1RM: Double {
         let w = Double(weight) ?? 0
@@ -40,47 +36,39 @@ final class LogViewModel {
     // MARK: - Save
 
     func saveLift(context: ModelContext) -> SaveResult? {
-        guard let w = Double(weight), w > 0,
+        guard let exercise = selectedExercise,
+              let w = Double(weight), w > 0,
               let r = Int(reps), r > 0 else { return nil }
 
-        // Fetch profile and stats
         guard let profile = try? context.fetch(FetchDescriptor<UserProfile>()).first,
               let stats = try? context.fetch(FetchDescriptor<AppStats>()).first else { return nil }
 
+        let muscle = exercise.muscleGroup
         let e1RM = RankingService.calculateE1RM(weight: w, reps: r)
 
-        // --- Snapshot BEFORE any updates ---
-        let previousBestOverall = stats.bestOverallE1RM
-        let previousScore = RankingService.calculateScore(e1RM: previousBestOverall, bodyweight: profile.bodyweight)
+        // Snapshot BEFORE
+        let previousBest = stats.bestE1RM(for: muscle)
+        let previousScore = RankingService.calculateScore(e1RM: previousBest, bodyweight: profile.bodyweight)
         let previousRank = Rank.fromScore(previousScore)
 
-        // Check PR for this specific lift
-        let currentBestForLift = bestE1RM(for: selectedLiftName, stats: stats)
-        let isNewPR = e1RM > currentBestForLift && currentBestForLift > 0  // not a PR on first ever lift
-        let isFirstLift = stats.totalLifts == 0
-        let isNewPROrFirst = e1RM > currentBestForLift  // always update best, but only flag PR if not first
-
-        // --- Apply updates ---
+        // Is this a PR?
+        let isNewPR = e1RM > previousBest && previousBest > 0
+        let isFirstForMuscle = previousBest == 0
 
         // Insert entry
-        let entry = LiftEntry(liftType: selectedLiftName, weight: w, reps: r)
+        let entry = LiftEntry(liftType: exercise.name, muscleGroup: muscle, weight: w, reps: r)
         context.insert(entry)
 
-        // Update per-lift best
-        if isNewPROrFirst {
-            updateBestE1RM(for: selectedLiftName, value: e1RM, stats: stats)
-        }
-
-        // Update overall best
-        if e1RM > stats.bestOverallE1RM {
-            stats.bestOverallE1RM = e1RM
+        // Update per-muscle best
+        if e1RM > previousBest {
+            stats.setBestE1RM(for: muscle, value: e1RM)
         }
 
         // Streak
         let newStreak = StreakService.updatedStreak(lastLoggedDate: stats.lastLoggedDate, currentStreak: stats.streak)
 
-        // XP — count as PR if it beats a previous best (not first ever)
-        let xpEarned = RankingService.calculateXP(isNewPR: isNewPR, streakDays: newStreak)
+        // XP
+        let xpEarned = RankingService.calculateXP(isNewPR: isNewPR || isFirstForMuscle, streakDays: newStreak)
 
         // Update stats
         stats.xp += xpEarned
@@ -88,8 +76,9 @@ final class LogViewModel {
         stats.lastLoggedDate = .now
         stats.totalLifts += 1
 
-        // --- Snapshot AFTER updates ---
-        let newScore = RankingService.calculateScore(e1RM: stats.bestOverallE1RM, bodyweight: profile.bodyweight)
+        // Snapshot AFTER
+        let newBest = stats.bestE1RM(for: muscle)
+        let newScore = RankingService.calculateScore(e1RM: newBest, bodyweight: profile.bodyweight)
         let newRank = Rank.fromScore(newScore)
 
         try? context.save()
@@ -97,29 +86,10 @@ final class LogViewModel {
 
         return SaveResult(
             xpEarned: xpEarned,
-            isNewPR: isNewPR || isFirstLift,
+            isNewPR: isNewPR || isFirstForMuscle,
+            muscleGroup: muscle,
             newRank: newRank,
             previousRank: previousRank
         )
-    }
-
-    // MARK: - Helpers
-
-    private func bestE1RM(for liftType: String, stats: AppStats) -> Double {
-        switch liftType {
-        case "Bench":    return stats.bestBenchE1RM
-        case "Squat":    return stats.bestSquatE1RM
-        case "Deadlift": return stats.bestDeadliftE1RM
-        default:         return 0
-        }
-    }
-
-    private func updateBestE1RM(for liftType: String, value: Double, stats: AppStats) {
-        switch liftType {
-        case "Bench":    stats.bestBenchE1RM = value
-        case "Squat":    stats.bestSquatE1RM = value
-        case "Deadlift": stats.bestDeadliftE1RM = value
-        default:         break
-        }
     }
 }

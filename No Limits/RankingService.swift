@@ -38,7 +38,7 @@ struct RankingService {
     static func calculateXP(isNewPR: Bool, streakDays: Int) -> Int {
         var xp = 10                           // base per log
         if isNewPR { xp += 25 }               // PR bonus
-        if streakDays > 0 { xp += 20 }        // streak bonus (ongoing streak)
+        if streakDays > 1 { xp += 20 }        // streak bonus (maintained streak, not first day)
         return xp
     }
 }
