@@ -17,7 +17,7 @@ struct BodyMapView: View {
             let h = size.height
             for zone in allZones {
                 let rank = muscleRanks[zone.muscle] ?? .iron
-                let opacity: CGFloat = zone.muscle == .hamstrings ? 0.4 : 0.6
+                let opacity: CGFloat = zone.muscle == .hamstrings ? 0.65 : 0.85
                 let path = zone.buildPath(in: w, h: h)
                 ctx.fill(path, with: .color(rank.color.opacity(opacity)))
             }
@@ -32,7 +32,7 @@ struct BodyMapView: View {
                 .renderingMode(.template)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .foregroundStyle(.white.opacity(0.06))
+                .foregroundStyle(.white.opacity(0.03))
         }
         .aspectRatio(1024.0 / 1536.0, contentMode: .fit)
     }
