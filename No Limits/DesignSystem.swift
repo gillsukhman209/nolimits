@@ -10,42 +10,49 @@ import SwiftUI
 // MARK: - Colors
 
 extension Color {
-    // Backgrounds
-    static let appBg         = Color(red: 0.04, green: 0.04, blue: 0.06)
-    static let cardBg        = Color(red: 0.09, green: 0.09, blue: 0.13)
-    static let surfaceBg     = Color(red: 0.12, green: 0.12, blue: 0.17)
+    // True black base
+    static let appBg         = Color(red: 0.02, green: 0.02, blue: 0.03)
+    static let cardBg        = Color(red: 0.08, green: 0.08, blue: 0.10)
+    static let surfaceBg     = Color(red: 0.12, green: 0.12, blue: 0.14)
     static let cardBorder    = Color.white.opacity(0.06)
 
     // Text
     static let textPrimary   = Color.white
-    static let textSecondary = Color(red: 0.55, green: 0.55, blue: 0.65)
-    static let textTertiary  = Color.white.opacity(0.30)
+    static let textSecondary = Color(red: 0.50, green: 0.52, blue: 0.58)
+    static let textTertiary  = Color(red: 0.30, green: 0.32, blue: 0.36)
 
-    // Accents
-    static let accentOrange  = Color(red: 1.00, green: 0.55, blue: 0.15)
-    static let accentRed     = Color(red: 1.00, green: 0.25, blue: 0.40)
-    static let accentEmber   = Color(red: 1.00, green: 0.40, blue: 0.10)
+    // Accents — electric cyan/mint primary
+    static let accentOrange  = Color(red: 0.00, green: 0.90, blue: 0.80)   // cyan-mint
+    static let accentRed     = Color(red: 0.20, green: 0.60, blue: 1.00)   // blue
+    static let accentEmber   = Color(red: 0.00, green: 0.75, blue: 0.65)   // darker mint
+    static let accentBlue    = Color(red: 0.35, green: 0.55, blue: 1.00)
 }
 
 // MARK: - Gradients
 
 extension LinearGradient {
     static let accent = LinearGradient(
-        colors: [.accentOrange, .accentRed],
+        colors: [Color(red: 0.00, green: 0.90, blue: 0.80), Color(red: 0.20, green: 0.60, blue: 1.00)],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
 
     static let accentSubtle = LinearGradient(
-        colors: [Color.accentOrange.opacity(0.15), Color.accentRed.opacity(0.08)],
+        colors: [Color.accentOrange.opacity(0.12), Color.accentRed.opacity(0.06)],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
 
     static let glassEdge = LinearGradient(
-        colors: [Color.white.opacity(0.12), Color.white.opacity(0.03)],
+        colors: [Color.white.opacity(0.08), Color.white.opacity(0.01)],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
+    )
+
+    static let heroGradient = LinearGradient(
+        colors: [Color(red: 0.04, green: 0.04, blue: 0.06), Color(red: 0.02, green: 0.02, blue: 0.03)],
+        startPoint: .top,
+        endPoint: .bottom
     )
 }
 
@@ -62,32 +69,32 @@ enum Rank: String, CaseIterable, Equatable {
 
     var color: Color {
         switch self {
-        case .iron:     return Color(red: 0.50, green: 0.50, blue: 0.58)
-        case .bronze:   return Color(red: 0.82, green: 0.52, blue: 0.22)
-        case .silver:   return Color(red: 0.75, green: 0.78, blue: 0.85)
-        case .gold:     return Color(red: 1.00, green: 0.82, blue: 0.20)
-        case .platinum: return Color(red: 0.20, green: 0.92, blue: 0.88)
-        case .diamond:  return Color(red: 0.45, green: 0.72, blue: 1.00)
-        case .titan:    return Color(red: 0.78, green: 0.32, blue: 1.00)
+        case .iron:     return Color(red: 0.45, green: 0.48, blue: 0.55)
+        case .bronze:   return Color(red: 0.85, green: 0.55, blue: 0.25)
+        case .silver:   return Color(red: 0.72, green: 0.75, blue: 0.82)
+        case .gold:     return Color(red: 1.00, green: 0.80, blue: 0.20)
+        case .platinum: return Color(red: 0.00, green: 0.90, blue: 0.85)
+        case .diamond:  return Color(red: 0.40, green: 0.70, blue: 1.00)
+        case .titan:    return Color(red: 0.75, green: 0.35, blue: 1.00)
         }
     }
 
     var gradient: LinearGradient {
         switch self {
         case .iron:
-            return LinearGradient(colors: [Color(red: 0.50, green: 0.50, blue: 0.58), Color(red: 0.38, green: 0.38, blue: 0.45)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            return LinearGradient(colors: [Color(red: 0.50, green: 0.53, blue: 0.60), Color(red: 0.35, green: 0.38, blue: 0.45)], startPoint: .top, endPoint: .bottom)
         case .bronze:
-            return LinearGradient(colors: [Color(red: 0.88, green: 0.58, blue: 0.25), Color(red: 0.72, green: 0.40, blue: 0.15)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            return LinearGradient(colors: [Color(red: 0.90, green: 0.60, blue: 0.28), Color(red: 0.70, green: 0.40, blue: 0.14)], startPoint: .top, endPoint: .bottom)
         case .silver:
-            return LinearGradient(colors: [Color(red: 0.82, green: 0.85, blue: 0.92), Color(red: 0.62, green: 0.65, blue: 0.72)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            return LinearGradient(colors: [Color(red: 0.80, green: 0.83, blue: 0.90), Color(red: 0.58, green: 0.61, blue: 0.70)], startPoint: .top, endPoint: .bottom)
         case .gold:
-            return LinearGradient(colors: [Color(red: 1.00, green: 0.88, blue: 0.30), Color(red: 0.90, green: 0.68, blue: 0.10)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            return LinearGradient(colors: [Color(red: 1.00, green: 0.85, blue: 0.28), Color(red: 0.88, green: 0.65, blue: 0.10)], startPoint: .top, endPoint: .bottom)
         case .platinum:
-            return LinearGradient(colors: [Color(red: 0.25, green: 0.95, blue: 0.90), Color(red: 0.10, green: 0.75, blue: 0.80)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            return LinearGradient(colors: [Color(red: 0.00, green: 0.95, blue: 0.90), Color(red: 0.00, green: 0.70, blue: 0.75)], startPoint: .top, endPoint: .bottom)
         case .diamond:
-            return LinearGradient(colors: [Color(red: 0.50, green: 0.78, blue: 1.00), Color(red: 0.30, green: 0.55, blue: 0.95)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            return LinearGradient(colors: [Color(red: 0.48, green: 0.75, blue: 1.00), Color(red: 0.25, green: 0.50, blue: 0.95)], startPoint: .top, endPoint: .bottom)
         case .titan:
-            return LinearGradient(colors: [Color(red: 0.85, green: 0.40, blue: 1.00), Color(red: 0.55, green: 0.15, blue: 0.90)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            return LinearGradient(colors: [Color(red: 0.80, green: 0.40, blue: 1.00), Color(red: 0.55, green: 0.18, blue: 0.88)], startPoint: .top, endPoint: .bottom)
         }
     }
 
@@ -141,7 +148,7 @@ enum Rank: String, CaseIterable, Equatable {
     }
 }
 
-// MARK: - Glass Card Modifier
+// MARK: - Card Modifier
 
 struct CardStyle: ViewModifier {
     var cornerRadius: CGFloat = 20
@@ -151,10 +158,10 @@ struct CardStyle: ViewModifier {
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .fill(Color.cardBg)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .strokeBorder(LinearGradient.glassEdge, lineWidth: 1)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .strokeBorder(Color.cardBorder, lineWidth: 1)
+                    )
             )
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
     }
@@ -163,55 +170,5 @@ struct CardStyle: ViewModifier {
 extension View {
     func cardStyle(cornerRadius: CGFloat = 20) -> some View {
         modifier(CardStyle(cornerRadius: cornerRadius))
-    }
-}
-
-// MARK: - Glow Effect
-
-struct GlowModifier: ViewModifier {
-    let color: Color
-    let radius: CGFloat
-
-    func body(content: Content) -> some View {
-        content
-            .shadow(color: color.opacity(0.5), radius: radius, x: 0, y: 0)
-            .shadow(color: color.opacity(0.2), radius: radius * 2, x: 0, y: 0)
-    }
-}
-
-extension View {
-    func glow(_ color: Color, radius: CGFloat = 8) -> some View {
-        modifier(GlowModifier(color: color, radius: radius))
-    }
-}
-
-// MARK: - Shimmer Animation
-
-struct ShimmerModifier: ViewModifier {
-    @State private var phase: CGFloat = 0
-
-    func body(content: Content) -> some View {
-        content
-            .overlay(
-                LinearGradient(
-                    colors: [.clear, Color.white.opacity(0.08), .clear],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .rotationEffect(.degrees(25))
-                .offset(x: phase)
-                .mask(content)
-            )
-            .onAppear {
-                withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
-                    phase = 400
-                }
-            }
-    }
-}
-
-extension View {
-    func shimmer() -> some View {
-        modifier(ShimmerModifier())
     }
 }

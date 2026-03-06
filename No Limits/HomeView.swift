@@ -14,133 +14,130 @@ struct HomeView: View {
 
     @Environment(\.modelContext) private var modelContext
     @State private var vm = HomeViewModel()
-    @State private var appeared = false
+    @State private var selectedTab: HomeTab = .muscles
+
+    enum HomeTab: String, CaseIterable {
+        case muscles = "Muscles"
+        case activity = "Activity"
+    }
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 24) {
-                headerRow
+        ZStack(alignment: .bottom) {
+            Color.appBg.ignoresSafeArea()
 
-                if vm.totalLifts == 0 {
-                    emptyState
-                } else {
-                    heroScoreCard
-                    logButton
-                    bodyMapSection
-                    muscleRanksList
-                    statsRow
-                    recentLiftsSection
-                }
+            if vm.totalLifts == 0 {
+                emptyState
+            } else {
+                mainContent
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 48)
-        }
-        .background {
-            ZStack {
-                Color.appBg
 
-                // Ambient rank glow
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [vm.overallRank.color.opacity(0.28), vm.overallRank.color.opacity(0.08), .clear],
-                            center: .center,
-                            startRadius: 30,
-                            endRadius: 240
-                        )
-                    )
-                    .frame(width: 500, height: 500)
-                    .offset(y: 40)
-                    .blur(radius: 50)
-
-                // Secondary warm glow
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [Color.accentOrange.opacity(0.10), .clear],
-                            center: .center,
-                            startRadius: 10,
-                            endRadius: 180
-                        )
-                    )
-                    .frame(width: 360, height: 360)
-                    .offset(x: -80, y: 200)
-                    .blur(radius: 60)
+            // Floating log button
+            if vm.totalLifts > 0 {
+                floatingLogButton
             }
-            .ignoresSafeArea()
         }
-        .onAppear {
-            vm.refresh(context: modelContext)
-            withAnimation(.easeOut(duration: 0.6).delay(0.1)) { appeared = true }
-        }
+        .onAppear { vm.refresh(context: modelContext) }
     }
 
     // MARK: - Empty State
 
-    var emptyState: some View {
-        VStack(spacing: 32) {
-            Spacer().frame(height: 32)
+    private var emptyState: some View {
+        VStack(spacing: 0) {
+            Spacer()
 
             ZStack {
+                // Pulsing rings
                 Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [Color.accentOrange.opacity(0.20), Color.clear],
-                            center: .center,
-                            startRadius: 10,
-                            endRadius: 80
-                        )
-                    )
-                    .frame(width: 160, height: 160)
-
+                    .stroke(Color.accentOrange.opacity(0.06), lineWidth: 1)
+                    .frame(width: 200, height: 200)
+                Circle()
+                    .stroke(Color.accentOrange.opacity(0.10), lineWidth: 1)
+                    .frame(width: 150, height: 150)
+                Circle()
+                    .fill(Color.accentOrange.opacity(0.05))
+                    .frame(width: 100, height: 100)
                 Image(systemName: "dumbbell.fill")
-                    .font(.system(size: 56, weight: .semibold))
+                    .font(.system(size: 36, weight: .medium))
                     .foregroundStyle(LinearGradient.accent)
-                    .glow(.accentOrange, radius: 12)
             }
 
-            VStack(spacing: 12) {
-                Text("No lifts yet")
-                    .font(.system(size: 30, weight: .black, design: .rounded))
-                    .foregroundColor(.white)
+            Spacer().frame(height: 40)
 
-                Text("Log your first lift to unlock\nyour strength rank.")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(4)
-            }
+            Text("Start Your Journey")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundColor(.white)
+
+            Spacer().frame(height: 10)
+
+            Text("Log your first lift to unlock\nyour strength rank.")
+                .font(.system(size: 15))
+                .foregroundColor(.textSecondary)
+                .multilineTextAlignment(.center)
+                .lineSpacing(4)
+
+            Spacer().frame(height: 36)
 
             Button(action: onLogTap) {
                 HStack(spacing: 10) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 18))
-                    Text("Log Your First Lift")
-                        .font(.system(size: 17, weight: .bold))
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .bold))
+                    Text("Log First Lift")
+                        .font(.system(size: 16, weight: .semibold))
                 }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 58)
+                .foregroundColor(.black)
+                .frame(width: 200, height: 52)
                 .background(LinearGradient.accent)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-                .glow(.accentOrange, radius: 6)
+                .clipShape(Capsule())
             }
             .buttonStyle(.plain)
 
-            Spacer().frame(height: 16)
+            Spacer()
+        }
+        .padding(.horizontal, 24)
+    }
+
+    // MARK: - Main Content
+
+    private var mainContent: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 0) {
+                topBar
+                    .padding(.horizontal, 24)
+                    .padding(.top, 8)
+
+                // Ring hero section
+                ringHero
+                    .padding(.top, 16)
+
+                // Stats strip
+                statsStrip
+                    .padding(.top, 24)
+                    .padding(.horizontal, 24)
+
+                // Tab switcher
+                tabSwitcher
+                    .padding(.top, 28)
+                    .padding(.horizontal, 24)
+
+                // Tab content
+                tabContent
+                    .padding(.top, 16)
+
+                Spacer().frame(height: 100)
+            }
         }
     }
 
-    // MARK: - Header
+    // MARK: - Top Bar
 
-    var headerRow: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 3) {
+    private var topBar: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(greeting)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.accentOrange)
-                Text(vm.todayLogged ? "Lift logged. Nice." : "Time to lift.")
-                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.textSecondary)
+                Text(vm.todayLogged ? "Lift logged" : "Time to lift")
+                    .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.white)
             }
 
@@ -149,276 +146,250 @@ struct HomeView: View {
             if vm.streak > 0 {
                 HStack(spacing: 5) {
                     Image(systemName: "flame.fill")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(LinearGradient.accent)
+                        .font(.system(size: 13))
+                        .foregroundColor(.accentOrange)
                     Text("\(vm.streak)")
-                        .font(.system(size: 15, weight: .black, design: .rounded))
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background(
-                    LinearGradient(
-                        colors: [Color.accentOrange.opacity(0.15), Color.accentRed.opacity(0.10)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .overlay(
-                    Capsule()
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [Color.accentOrange.opacity(0.45), Color.accentRed.opacity(0.25)],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            ),
-                            lineWidth: 1
-                        )
-                )
+                .background(Color.accentOrange.opacity(0.10))
                 .clipShape(Capsule())
+                .overlay(Capsule().strokeBorder(Color.accentOrange.opacity(0.15), lineWidth: 1))
             }
         }
-        .opacity(appeared ? 1 : 0)
-        .offset(y: appeared ? 0 : -10)
     }
 
-    // MARK: - Hero Score Card
+    // MARK: - Ring Hero
 
-    var heroScoreCard: some View {
-        VStack(spacing: 0) {
-            // Top section: rank icon + score
-            VStack(spacing: 16) {
-                ZStack {
-                    // Outer glow ring
-                    Circle()
-                        .fill(vm.overallRank.color.opacity(0.08))
-                        .frame(width: 120, height: 120)
+    private var ringHero: some View {
+        ZStack {
+            // Background track
+            Circle()
+                .stroke(Color.white.opacity(0.04), lineWidth: 14)
+                .frame(width: 220, height: 220)
 
-                    Circle()
-                        .strokeBorder(
-                            AngularGradient(
-                                colors: [vm.overallRank.color, vm.overallRank.color.opacity(0.15), vm.overallRank.color],
-                                center: .center
-                            ),
-                            lineWidth: 2
-                        )
-                        .frame(width: 100, height: 100)
+            // Progress arc
+            Circle()
+                .trim(from: 0, to: vm.overallProgress)
+                .stroke(
+                    AngularGradient(
+                        colors: [vm.overallRank.color.opacity(0.5), vm.overallRank.color],
+                        center: .center,
+                        startAngle: .degrees(0),
+                        endAngle: .degrees(360 * vm.overallProgress)
+                    ),
+                    style: StrokeStyle(lineWidth: 14, lineCap: .round)
+                )
+                .frame(width: 220, height: 220)
+                .rotationEffect(.degrees(-90))
 
+            // Glow dot at end of arc
+            Circle()
+                .fill(vm.overallRank.color)
+                .frame(width: 18, height: 18)
+                .shadow(color: vm.overallRank.color.opacity(0.6), radius: 8)
+                .offset(y: -110)
+                .rotationEffect(.degrees(360 * vm.overallProgress))
+
+            // Center content
+            VStack(spacing: 6) {
+                Text(String(format: "%.2f", vm.overallScore))
+                    .font(.system(size: 52, weight: .heavy, design: .rounded))
+                    .foregroundColor(.white)
+
+                HStack(spacing: 6) {
                     Image(systemName: vm.overallRank.symbolName)
-                        .font(.system(size: 38, weight: .semibold))
-                        .foregroundStyle(vm.overallRank.gradient)
-                        .glow(vm.overallRank.color, radius: 10)
-                }
-
-                VStack(spacing: 6) {
+                        .font(.system(size: 11, weight: .semibold))
                     Text(vm.overallRank.rawValue.uppercased())
-                        .font(.system(size: 11, weight: .heavy, design: .rounded))
-                        .foregroundColor(vm.overallRank.color)
-                        .tracking(4)
-
-                    Text(String(format: "%.2f", vm.overallScore))
-                        .font(.system(size: 52, weight: .black, design: .rounded))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.white, vm.overallRank.color.opacity(0.7)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .contentTransition(.numericText())
-
-                    Text("Strength Score")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.textSecondary)
+                        .font(.system(size: 12, weight: .bold))
+                        .tracking(2)
                 }
+                .foregroundColor(vm.overallRank.color)
             }
-            .padding(.top, 32)
+        }
+        .frame(height: 260)
+    }
 
-            // Progress bar
-            VStack(spacing: 10) {
-                HStack {
-                    Text(vm.overallRank.rawValue)
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .foregroundColor(vm.overallRank.color)
-                    Spacer()
-                    Text(vm.overallRank.nextRank?.rawValue ?? "MAX")
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .foregroundColor(vm.overallRank.nextRank?.color ?? Color.white.opacity(0.25))
+    // MARK: - Stats Strip
+
+    private var statsStrip: some View {
+        HStack(spacing: 0) {
+            statItem(value: "\(vm.totalLifts)", label: "LIFTS")
+            Divider()
+                .frame(height: 28)
+                .background(Color.white.opacity(0.08))
+            statItem(value: "\(vm.streak)", label: "STREAK")
+            Divider()
+                .frame(height: 28)
+                .background(Color.white.opacity(0.08))
+            statItem(value: "\(Int(vm.overallProgress * 100))%", label: "TO NEXT")
+        }
+        .padding(.vertical, 16)
+        .background(Color.cardBg)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(Color.cardBorder, lineWidth: 1)
+        )
+    }
+
+    private func statItem(value: String, label: String) -> some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+            Text(label)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(.textSecondary)
+                .tracking(1)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Tab Switcher
+
+    private var tabSwitcher: some View {
+        HStack(spacing: 4) {
+            ForEach(HomeTab.allCases, id: \.self) { tab in
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) { selectedTab = tab }
+                }) {
+                    Text(tab.rawValue)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(selectedTab == tab ? .white : .textSecondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(
+                            selectedTab == tab
+                                ? Color.surfaceBg
+                                : Color.clear
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .background(Color.cardBg)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
 
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.white.opacity(0.06))
-                            .frame(height: 8)
+    // MARK: - Tab Content
 
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(vm.overallRank.gradient)
-                            .frame(width: geo.size.width * vm.overallProgress, height: 8)
-                            .glow(vm.overallRank.color, radius: 4)
+    @ViewBuilder
+    private var tabContent: some View {
+        switch selectedTab {
+        case .muscles:
+            musclesTab
+        case .activity:
+            activityTab
+        }
+    }
+
+    // MARK: - Muscles Tab
+
+    private var musclesTab: some View {
+        VStack(spacing: 16) {
+            // Body map — full width, no card wrapper
+            BodyMapView(muscleRanks: vm.muscleRanks)
+                .frame(height: 380)
+                .padding(.horizontal, 24)
+
+            // Horizontal scrolling muscle chips
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(vm.muscleRankList) { info in
+                        muscleChip(info: info)
                     }
                 }
-                .frame(height: 8)
-
-                Text("\(Int(vm.overallProgress * 100))% to \(vm.overallRank.nextRank?.rawValue ?? "MAX")")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.textTertiary)
+                .padding(.horizontal, 24)
             }
-            .padding(.horizontal, 28)
-            .padding(.top, 28)
-            .padding(.bottom, 28)
         }
-        .background(
-            RoundedRectangle(cornerRadius: 24)
-                .fill(Color.cardBg)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24)
-                        .fill(
-                            LinearGradient(
-                                colors: [vm.overallRank.color.opacity(0.08), Color.clear],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                )
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 24)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [vm.overallRank.color.opacity(0.25), Color.white.opacity(0.05)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 24))
-        .opacity(appeared ? 1 : 0)
-        .offset(y: appeared ? 0 : 20)
     }
 
-    // MARK: - Log Button
-
-    var logButton: some View {
-        Button(action: onLogTap) {
-            HStack(spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill(Color.white.opacity(0.12))
-                        .frame(width: 42, height: 42)
-                    Image(systemName: vm.todayLogged ? "pencil" : "plus")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(vm.todayLogged ? "Log Another Lift" : "Log Today's Lift")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                    Text(vm.todayLogged ? "Keep the gains coming" : "Pick an exercise and go")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(Color.white.opacity(0.55))
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(Color.white.opacity(0.45))
+    private func muscleChip(info: MuscleRankInfo) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(info.rank.color)
+                    .frame(width: 8, height: 8)
+                Text(info.muscle.rawValue)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white)
             }
-            .padding(.horizontal, 20)
+
+            Text(info.rank.rawValue)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(info.rank.color)
+                .tracking(0.5)
+
+            // Thin progress bar
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.06))
+                    Capsule()
+                        .fill(info.rank.color)
+                        .frame(width: max(geo.size.width * info.progress, 4))
+                }
+            }
+            .frame(height: 3)
+        }
+        .frame(width: 120)
+        .padding(14)
+        .background(Color.cardBg)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(info.rank.color.opacity(0.12), lineWidth: 1)
+        )
+    }
+
+    // MARK: - Activity Tab
+
+    private var activityTab: some View {
+        VStack(spacing: 8) {
+            if vm.recentLifts.isEmpty {
+                Text("No lifts yet")
+                    .font(.system(size: 14))
+                    .foregroundColor(.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
+            } else {
+                ForEach(vm.recentLifts, id: \.id) { entry in
+                    LiftHistoryRow(
+                        liftName: entry.liftType,
+                        weight: Int(entry.weight),
+                        reps: entry.reps,
+                        label: vm.relativeLabel(for: entry),
+                        muscleGroup: entry.muscleGroup
+                    )
+                }
+            }
+        }
+        .padding(.horizontal, 24)
+    }
+
+    // MARK: - Floating Log Button
+
+    private var floatingLogButton: some View {
+        Button(action: onLogTap) {
+            HStack(spacing: 10) {
+                Image(systemName: vm.todayLogged ? "pencil" : "plus")
+                    .font(.system(size: 15, weight: .bold))
+                Text(vm.todayLogged ? "Log Another" : "Log Lift")
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .foregroundColor(.black)
+            .padding(.horizontal, 28)
             .padding(.vertical, 16)
             .background(LinearGradient.accent)
-            .clipShape(RoundedRectangle(cornerRadius: 18))
-            .glow(.accentOrange, radius: 4)
+            .clipShape(Capsule())
+            .shadow(color: Color.accentOrange.opacity(0.3), radius: 16, y: 4)
         }
         .buttonStyle(.plain)
-    }
-
-    // MARK: - Body Map
-
-    var bodyMapSection: some View {
-        VStack(spacing: 14) {
-            HStack(spacing: 8) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(LinearGradient.accent)
-                    .frame(width: 4, height: 18)
-                Text("Muscle Map")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.white)
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-
-            BodyMapView(muscleRanks: vm.muscleRanks)
-                .frame(height: 420)
-        }
-        .padding(.vertical, 20)
-        .cardStyle(cornerRadius: 20)
-    }
-
-    // MARK: - Muscle Ranks List
-
-    var muscleRanksList: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(LinearGradient.accent)
-                    .frame(width: 4, height: 18)
-                Text("Muscle Ranks")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.white)
-            }
-
-            VStack(spacing: 8) {
-                ForEach(vm.muscleRankList) { info in
-                    MuscleRankRow(info: info)
-                }
-            }
-        }
-    }
-
-    // MARK: - Stats Row
-
-    var statsRow: some View {
-        HStack(spacing: 12) {
-            MiniStatCard(label: "Streak", value: "\(vm.streak)d", symbolName: "flame.fill", color: .accentOrange)
-            MiniStatCard(label: "Lifts", value: "\(vm.totalLifts)", symbolName: "dumbbell.fill", color: Color(red: 0.45, green: 0.72, blue: 1.00))
-        }
-    }
-
-    // MARK: - Recent Lifts
-
-    var recentLiftsSection: some View {
-        Group {
-            if vm.recentLifts.isEmpty {
-                EmptyView()
-            } else {
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack(spacing: 8) {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(LinearGradient.accent)
-                            .frame(width: 4, height: 18)
-                        Text("Recent Lifts")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.white)
-                    }
-
-                    VStack(spacing: 8) {
-                        ForEach(vm.recentLifts, id: \.id) { entry in
-                            LiftHistoryRow(
-                                liftName: entry.liftType,
-                                weight: Int(entry.weight),
-                                reps: entry.reps,
-                                label: vm.relativeLabel(for: entry),
-                                muscleGroup: entry.muscleGroup
-                            )
-                        }
-                    }
-                }
-            }
-        }
+        .padding(.bottom, 36)
     }
 
     // MARK: - Greeting
@@ -433,55 +404,42 @@ struct HomeView: View {
     }
 }
 
-// MARK: - Muscle Rank Row
+// MARK: - Stat Tile
 
-struct MuscleRankRow: View {
-    let info: MuscleRankInfo
+struct StatTile: View {
+    let value: String
+    let unit: String?
+    let label: String
+    let color: Color
 
     var body: some View {
-        HStack(spacing: 14) {
-            // Rank icon with glow
-            ZStack {
-                Circle()
-                    .fill(info.rank.color.opacity(0.12))
-                    .frame(width: 40, height: 40)
-                Image(systemName: info.rank.symbolName)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(info.rank.gradient)
-            }
-
-            VStack(alignment: .leading, spacing: 5) {
-                HStack {
-                    Text(info.muscle.rawValue)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
-                    Spacer()
-                    Text(info.rank.rawValue)
-                        .font(.system(size: 12, weight: .heavy, design: .rounded))
-                        .foregroundColor(info.rank.color)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text(value)
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                if let unit {
+                    Text(unit)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.textSecondary)
                 }
-
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(Color.white.opacity(0.06))
-                            .frame(height: 5)
-
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(info.rank.gradient)
-                            .frame(width: geo.size.width * info.progress, height: 5)
-                    }
-                }
-                .frame(height: 5)
             }
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.textSecondary)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
-        .cardStyle(cornerRadius: 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color.cardBg)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(color.opacity(0.08), lineWidth: 1)
+        )
     }
 }
 
-// MARK: - Mini Stat Card
+// MARK: - Mini Stat Card (kept for compatibility)
 
 struct MiniStatCard: View {
     let label: String
@@ -490,25 +448,7 @@ struct MiniStatCard: View {
     let color: Color
 
     var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: symbolName)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(color)
-                .glow(color, radius: 4)
-
-            Text(value)
-                .font(.system(size: 22, weight: .black, design: .rounded))
-                .foregroundColor(.white)
-
-            Text(label)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.textSecondary)
-                .textCase(.uppercase)
-                .tracking(1)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
-        .cardStyle(cornerRadius: 16)
+        StatTile(value: value, unit: nil, label: label, color: color)
     }
 }
 
@@ -523,31 +463,84 @@ struct LiftHistoryRow: View {
 
     var body: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
+            // Colored side indicator
+            RoundedRectangle(cornerRadius: 2)
+                .fill(muscleGroup.map { _ in Color.accentOrange } ?? Color.textSecondary)
+                .frame(width: 3, height: 36)
+
+            VStack(alignment: .leading, spacing: 3) {
                 Text(liftName)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     if let muscle = muscleGroup {
                         Text(muscle.rawValue)
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.accentOrange)
                     }
                     Text(label)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 12))
                         .foregroundColor(.textSecondary)
                 }
             }
+            .padding(.leading, 8)
 
             Spacer()
 
-            Text("\(weight) lbs x \(reps)")
-                .font(.system(size: 15, weight: .bold, design: .rounded))
+            Text("\(weight) x \(reps)")
+                .font(.system(size: 14, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 16)
         .padding(.vertical, 14)
+        .background(Color.cardBg)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(Color.cardBorder, lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Muscle Rank Tile (kept for compatibility)
+
+struct MuscleRankTile: View {
+    let info: MuscleRankInfo
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(info.muscle.rawValue)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                Spacer()
+                Image(systemName: info.rank.symbolName)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(info.rank.color)
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.06))
+                    Capsule()
+                        .fill(info.rank.color)
+                        .frame(width: max(geo.size.width * info.progress, 4))
+                }
+            }
+            .frame(height: 5)
+            Text(info.rank.rawValue)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(info.rank.color)
+        }
+        .padding(14)
         .cardStyle(cornerRadius: 14)
+    }
+}
+
+// MARK: - Muscle Rank Row (kept for compatibility)
+
+struct MuscleRankRow: View {
+    let info: MuscleRankInfo
+    var body: some View {
+        MuscleRankTile(info: info)
     }
 }
 
