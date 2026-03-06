@@ -15,6 +15,7 @@ struct No_LimitsApp: App {
             UserProfile.self,
             LiftEntry.self,
             AppStats.self,
+            CustomExercise.self,
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {

@@ -13,6 +13,7 @@ enum AppScreen: Equatable {
     case home
     case log
     case rankUp(Rank, MuscleGroup)
+    case exerciseDetail(String, MuscleGroup) // exerciseName, muscleGroup
 }
 
 struct ContentView: View {
@@ -44,7 +45,8 @@ struct ContentView: View {
         case .home:
             HomeView(
                 onLogTap: { navigate(to: .log) },
-                onRankUp: { rank, muscle in navigate(to: .rankUp(rank, muscle)) }
+                onRankUp: { rank, muscle in navigate(to: .rankUp(rank, muscle)) },
+                onExerciseTap: { name, muscle in navigate(to: .exerciseDetail(name, muscle)) }
             )
             .transition(.opacity)
         case .log:
@@ -62,6 +64,16 @@ struct ContentView: View {
                     insertion: .scale(scale: 0.9).combined(with: .opacity),
                     removal: .opacity
                 ))
+        case .exerciseDetail(let name, let muscle):
+            ExerciseDetailView(
+                exerciseName: name,
+                muscleGroup: muscle,
+                onDismiss: { navigate(to: .home) }
+            )
+            .transition(.asymmetric(
+                insertion: .move(edge: .trailing).combined(with: .opacity),
+                removal: .move(edge: .trailing).combined(with: .opacity)
+            ))
         }
     }
 

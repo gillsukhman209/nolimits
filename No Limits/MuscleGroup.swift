@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftData
 
 enum MuscleGroup: String, CaseIterable, Codable, Identifiable {
     case upperChest  = "Upper Chest"
@@ -24,15 +25,27 @@ enum MuscleGroup: String, CaseIterable, Codable, Identifiable {
 
 // MARK: - Exercise Catalog
 
-struct Exercise: Identifiable {
+struct Exercise: Identifiable, Equatable {
     let name: String
     let muscleGroup: MuscleGroup
+    let isCustom: Bool
+
     var id: String { name }
+
+    init(name: String, muscleGroup: MuscleGroup, isCustom: Bool = false) {
+        self.name = name
+        self.muscleGroup = muscleGroup
+        self.isCustom = isCustom
+    }
+
+    static func == (lhs: Exercise, rhs: Exercise) -> Bool {
+        lhs.name == rhs.name
+    }
 }
 
 struct ExerciseCatalog {
 
-    static let all: [Exercise] = [
+    static let builtIn: [Exercise] = [
         // Upper Chest
         Exercise(name: "Incline Bench", muscleGroup: .upperChest),
         Exercise(name: "Incline Dumbbell Press", muscleGroup: .upperChest),
@@ -97,14 +110,35 @@ struct ExerciseCatalog {
         Exercise(name: "Ab Rollout", muscleGroup: .abdominals),
     ]
 
+    /// The old `all` property — now returns built-in only (for backward compat).
+    /// Use `allExercises(context:)` to include custom exercises.
+    static var all: [Exercise] { builtIn }
+
+    static func allExercises(context: ModelContext) -> [Exercise] {
+        let custom = (try? context.fetch(FetchDescriptor<CustomExercise>())) ?? []
+        let customExercises = custom.compactMap { ce -> Exercise? in
+            guard let muscle = ce.muscleGroup else { return nil }
+            return Exercise(name: ce.name, muscleGroup: muscle, isCustom: true)
+        }
+        return builtIn + customExercises
+    }
+
+    static func grouped(context: ModelContext) -> [(MuscleGroup, [Exercise])] {
+        let exercises = allExercises(context: context)
+        return MuscleGroup.allCases.compactMap { group in
+            let matching = exercises.filter { $0.muscleGroup == group }
+            return matching.isEmpty ? nil : (group, matching)
+        }
+    }
+
     static var grouped: [(MuscleGroup, [Exercise])] {
         MuscleGroup.allCases.compactMap { group in
-            let exercises = all.filter { $0.muscleGroup == group }
+            let exercises = builtIn.filter { $0.muscleGroup == group }
             return exercises.isEmpty ? nil : (group, exercises)
         }
     }
 
     static func muscleGroup(for exerciseName: String) -> MuscleGroup? {
-        all.first { $0.name == exerciseName }?.muscleGroup
+        builtIn.first { $0.name == exerciseName }?.muscleGroup
     }
 }

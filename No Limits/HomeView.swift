@@ -11,6 +11,7 @@ import SwiftData
 struct HomeView: View {
     let onLogTap: () -> Void
     let onRankUp: (Rank, MuscleGroup) -> Void
+    var onExerciseTap: ((String, MuscleGroup) -> Void)? = nil
 
     @Environment(\.modelContext) private var modelContext
     @State private var vm = HomeViewModel()
@@ -358,13 +359,20 @@ struct HomeView: View {
                     .padding(.vertical, 40)
             } else {
                 ForEach(vm.recentLifts, id: \.id) { entry in
-                    LiftHistoryRow(
-                        liftName: entry.liftType,
-                        weight: Int(entry.weight),
-                        reps: entry.reps,
-                        label: vm.relativeLabel(for: entry),
-                        muscleGroup: entry.muscleGroup
-                    )
+                    Button(action: {
+                        if let muscle = entry.muscleGroup {
+                            onExerciseTap?(entry.liftType, muscle)
+                        }
+                    }) {
+                        LiftHistoryRow(
+                            liftName: entry.liftType,
+                            weight: Int(entry.weight),
+                            reps: entry.reps,
+                            label: vm.relativeLabel(for: entry),
+                            muscleGroup: entry.muscleGroup
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -545,6 +553,6 @@ struct MuscleRankRow: View {
 }
 
 #Preview {
-    HomeView(onLogTap: {}, onRankUp: { _, _ in })
-        .modelContainer(for: [UserProfile.self, LiftEntry.self, AppStats.self], inMemory: true)
+    HomeView(onLogTap: {}, onRankUp: { _, _ in }, onExerciseTap: { _, _ in })
+        .modelContainer(for: [UserProfile.self, LiftEntry.self, AppStats.self, CustomExercise.self], inMemory: true)
 }
