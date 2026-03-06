@@ -16,7 +16,7 @@ struct LogView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var vm = LogViewModel()
     @State private var saveResult: SaveResult?
-    @State private var showXPToast = false
+    @State private var showSaveToast = false
     @State private var showExercisePicker = false
 
     init(onDismiss: @escaping () -> Void, onRankUp: ((Rank, MuscleGroup) -> Void)? = nil) {
@@ -54,14 +54,14 @@ struct LogView: View {
                     .padding(.bottom, 48)
             }
 
-            if showXPToast, let result = saveResult {
+            if showSaveToast, let result = saveResult {
                 VStack {
                     Spacer()
-                    xpToast(result: result)
+                    saveToast(result: result)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .padding(.bottom, 120)
                 }
-                .animation(.spring(response: 0.4, dampingFraction: 0.75), value: showXPToast)
+                .animation(.spring(response: 0.4, dampingFraction: 0.75), value: showSaveToast)
             }
         }
         .sheet(isPresented: $showExercisePicker) {
@@ -232,22 +232,21 @@ struct LogView: View {
         .animation(.easeInOut(duration: 0.2), value: vm.saved)
     }
 
-    // MARK: - XP Toast
+    // MARK: - Save Toast
 
-    func xpToast(result: SaveResult) -> some View {
+    func saveToast(result: SaveResult) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: result.isNewPR ? "trophy.fill" : "star.fill")
+            Image(systemName: result.isNewPR ? "trophy.fill" : "checkmark.circle.fill")
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(LinearGradient.accent)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(result.isNewPR ? "New \(result.muscleGroup.rawValue) PR!" : "Lift Saved")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.white)
-                Text("+\(result.xpEarned) XP")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.accentOrange)
-            }
+            Text(result.isNewPR ? "New \(result.muscleGroup.rawValue) PR!" : "Lift Saved")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(.white)
             Spacer()
+            // XP display (commented out — uncomment to re-enable)
+            // Text("+\(result.xpEarned) XP")
+            //     .font(.system(size: 13, weight: .semibold))
+            //     .foregroundColor(.accentOrange)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
@@ -264,10 +263,10 @@ struct LogView: View {
         let impact = UIImpactFeedbackGenerator(style: result.isNewPR ? .heavy : .medium)
         impact.impactOccurred()
 
-        withAnimation { showXPToast = true }
+        withAnimation { showSaveToast = true }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            withAnimation { showXPToast = false }
+            withAnimation { showSaveToast = false }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 if result.didRankUp {
                     onRankUp?(result.newRank, result.muscleGroup)

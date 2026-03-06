@@ -30,7 +30,7 @@ final class HomeViewModel {
 
     // Stats
     var streak: Int = 0
-    var xp: Int = 0
+    // var xp: Int = 0  // XP disabled — uncomment to re-enable
     var totalLifts: Int = 0
     var todayLogged: Bool = false
     var recentLifts: [LiftEntry] = []
@@ -79,7 +79,7 @@ final class HomeViewModel {
             self.streak = 0
         }
 
-        self.xp = stats.xp
+        // self.xp = stats.xp  // XP disabled
         self.totalLifts = stats.totalLifts
 
         // Recent lifts

@@ -33,12 +33,12 @@ struct RankingService {
         return min(max((score - rank.lowerBound) / range, 0), 1.0)
     }
 
-    // MARK: - XP
+    // MARK: - XP (commented out — uncomment to re-enable XP system)
 
-    static func calculateXP(isNewPR: Bool, streakDays: Int) -> Int {
-        var xp = 10                           // base per log
-        if isNewPR { xp += 25 }               // PR bonus
-        if streakDays > 1 { xp += 20 }        // streak bonus (maintained streak, not first day)
-        return xp
-    }
+//    static func calculateXP(isNewPR: Bool, streakDays: Int) -> Int {
+//        var xp = 10                           // base per log
+//        if isNewPR { xp += 25 }               // PR bonus
+//        if streakDays > 1 { xp += 20 }        // streak bonus (maintained streak, not first day)
+//        return xp
+//    }
 }

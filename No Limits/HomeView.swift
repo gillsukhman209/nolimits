@@ -298,7 +298,8 @@ struct HomeView: View {
 
     var statsRow: some View {
         HStack(spacing: 12) {
-            MiniStatCard(label: "XP", value: "\(vm.xp)", symbolName: "star.fill", color: .accentOrange)
+            // XP card (commented out — uncomment to re-enable)
+            // MiniStatCard(label: "XP", value: "\(vm.xp)", symbolName: "star.fill", color: .accentOrange)
             MiniStatCard(label: "Streak", value: "\(vm.streak)d", symbolName: "flame.fill", color: .red)
             MiniStatCard(label: "Lifts", value: "\(vm.totalLifts)", symbolName: "dumbbell.fill", color: Color(red: 0.42, green: 0.76, blue: 1.00))
         }

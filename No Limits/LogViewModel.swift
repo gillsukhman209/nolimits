@@ -9,7 +9,7 @@ import Foundation
 import SwiftData
 
 struct SaveResult {
-    let xpEarned: Int
+    // let xpEarned: Int  // XP disabled — uncomment to re-enable
     let isNewPR: Bool
     let muscleGroup: MuscleGroup
     let newRank: Rank
@@ -67,11 +67,11 @@ final class LogViewModel {
         // Streak
         let newStreak = StreakService.updatedStreak(lastLoggedDate: stats.lastLoggedDate, currentStreak: stats.streak)
 
-        // XP
-        let xpEarned = RankingService.calculateXP(isNewPR: isNewPR || isFirstForMuscle, streakDays: newStreak)
+        // XP (commented out — uncomment to re-enable XP system)
+        // let xpEarned = RankingService.calculateXP(isNewPR: isNewPR || isFirstForMuscle, streakDays: newStreak)
+        // stats.xp += xpEarned
 
         // Update stats
-        stats.xp += xpEarned
         stats.streak = newStreak
         stats.lastLoggedDate = .now
         stats.totalLifts += 1
@@ -85,7 +85,7 @@ final class LogViewModel {
         saved = true
 
         return SaveResult(
-            xpEarned: xpEarned,
+            // xpEarned: xpEarned,  // XP disabled
             isNewPR: isNewPR || isFirstForMuscle,
             muscleGroup: muscle,
             newRank: newRank,
