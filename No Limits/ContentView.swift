@@ -21,7 +21,7 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            Color.appBg.ignoresSafeArea()
+            LinearGradient.screenBg.ignoresSafeArea()
             screenContent
         }
         .preferredColorScheme(.dark)

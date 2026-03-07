@@ -163,7 +163,7 @@ struct NormalizedZone {
 
 #Preview {
     ZStack {
-        Color.appBg.ignoresSafeArea()
+        LinearGradient.screenBg.ignoresSafeArea()
         BodyMapView(muscleRanks: [
             .chest: .gold,
             .upperChest: .silver,

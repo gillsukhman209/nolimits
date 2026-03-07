@@ -10,47 +10,59 @@ import SwiftUI
 // MARK: - Colors
 
 extension Color {
-    // True black base
-    static let appBg         = Color(red: 0.02, green: 0.02, blue: 0.03)
-    static let cardBg        = Color(red: 0.08, green: 0.08, blue: 0.10)
-    static let surfaceBg     = Color(red: 0.12, green: 0.12, blue: 0.14)
-    static let cardBorder    = Color.white.opacity(0.06)
+    // Deep indigo base — NOT flat black
+    static let appBg         = Color(red: 0.04, green: 0.03, blue: 0.10)
+    static let cardBg        = Color(red: 0.09, green: 0.07, blue: 0.18)
+    static let surfaceBg     = Color(red: 0.13, green: 0.10, blue: 0.24)
+    static let cardBorder    = Color.white.opacity(0.08)
 
     // Text
     static let textPrimary   = Color.white
-    static let textSecondary = Color(red: 0.50, green: 0.52, blue: 0.58)
-    static let textTertiary  = Color(red: 0.30, green: 0.32, blue: 0.36)
+    static let textSecondary = Color(red: 0.58, green: 0.55, blue: 0.72)
+    static let textTertiary  = Color(red: 0.35, green: 0.32, blue: 0.48)
 
-    // Accents — electric cyan/mint primary
-    static let accentOrange  = Color(red: 0.00, green: 0.90, blue: 0.80)   // cyan-mint
-    static let accentRed     = Color(red: 0.20, green: 0.60, blue: 1.00)   // blue
-    static let accentEmber   = Color(red: 0.00, green: 0.75, blue: 0.65)   // darker mint
-    static let accentBlue    = Color(red: 0.35, green: 0.55, blue: 1.00)
+    // Accents — vivid multi-color palette
+    static let accentOrange  = Color(red: 0.55, green: 0.35, blue: 1.00)   // vivid violet
+    static let accentRed     = Color(red: 0.95, green: 0.30, blue: 0.60)   // hot pink
+    static let accentEmber   = Color(red: 0.40, green: 0.20, blue: 0.90)   // deeper violet
+    static let accentBlue    = Color(red: 0.20, green: 0.70, blue: 1.00)   // sky blue
+    static let accentCyan    = Color(red: 0.00, green: 0.90, blue: 0.85)   // cyan
+    static let accentGreen   = Color(red: 0.20, green: 0.90, blue: 0.50)   // mint green
 }
 
 // MARK: - Gradients
 
 extension LinearGradient {
     static let accent = LinearGradient(
-        colors: [Color(red: 0.00, green: 0.90, blue: 0.80), Color(red: 0.20, green: 0.60, blue: 1.00)],
+        colors: [Color(red: 0.55, green: 0.35, blue: 1.00), Color(red: 0.95, green: 0.30, blue: 0.60)],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
 
     static let accentSubtle = LinearGradient(
-        colors: [Color.accentOrange.opacity(0.12), Color.accentRed.opacity(0.06)],
+        colors: [Color.accentOrange.opacity(0.15), Color.accentRed.opacity(0.08)],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
 
     static let glassEdge = LinearGradient(
-        colors: [Color.white.opacity(0.08), Color.white.opacity(0.01)],
+        colors: [Color.white.opacity(0.12), Color.white.opacity(0.02)],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
 
     static let heroGradient = LinearGradient(
-        colors: [Color(red: 0.04, green: 0.04, blue: 0.06), Color(red: 0.02, green: 0.02, blue: 0.03)],
+        colors: [Color(red: 0.08, green: 0.05, blue: 0.18), Color(red: 0.04, green: 0.03, blue: 0.10)],
+        startPoint: .top,
+        endPoint: .bottom
+    )
+
+    static let screenBg = LinearGradient(
+        colors: [
+            Color(red: 0.08, green: 0.04, blue: 0.20),
+            Color(red: 0.04, green: 0.03, blue: 0.10),
+            Color(red: 0.02, green: 0.02, blue: 0.06)
+        ],
         startPoint: .top,
         endPoint: .bottom
     )
@@ -69,32 +81,32 @@ enum Rank: String, CaseIterable, Equatable {
 
     var color: Color {
         switch self {
-        case .iron:     return Color(red: 0.45, green: 0.48, blue: 0.55)
-        case .bronze:   return Color(red: 0.85, green: 0.55, blue: 0.25)
-        case .silver:   return Color(red: 0.72, green: 0.75, blue: 0.82)
-        case .gold:     return Color(red: 1.00, green: 0.80, blue: 0.20)
-        case .platinum: return Color(red: 0.00, green: 0.90, blue: 0.85)
-        case .diamond:  return Color(red: 0.40, green: 0.70, blue: 1.00)
-        case .titan:    return Color(red: 0.75, green: 0.35, blue: 1.00)
+        case .iron:     return Color(red: 0.50, green: 0.52, blue: 0.65)
+        case .bronze:   return Color(red: 0.90, green: 0.55, blue: 0.20)
+        case .silver:   return Color(red: 0.75, green: 0.78, blue: 0.90)
+        case .gold:     return Color(red: 1.00, green: 0.78, blue: 0.15)
+        case .platinum: return Color(red: 0.00, green: 0.92, blue: 0.88)
+        case .diamond:  return Color(red: 0.35, green: 0.65, blue: 1.00)
+        case .titan:    return Color(red: 0.80, green: 0.30, blue: 1.00)
         }
     }
 
     var gradient: LinearGradient {
         switch self {
         case .iron:
-            return LinearGradient(colors: [Color(red: 0.50, green: 0.53, blue: 0.60), Color(red: 0.35, green: 0.38, blue: 0.45)], startPoint: .top, endPoint: .bottom)
+            return LinearGradient(colors: [Color(red: 0.55, green: 0.57, blue: 0.70), Color(red: 0.38, green: 0.40, blue: 0.52)], startPoint: .topLeading, endPoint: .bottomTrailing)
         case .bronze:
-            return LinearGradient(colors: [Color(red: 0.90, green: 0.60, blue: 0.28), Color(red: 0.70, green: 0.40, blue: 0.14)], startPoint: .top, endPoint: .bottom)
+            return LinearGradient(colors: [Color(red: 0.95, green: 0.62, blue: 0.22), Color(red: 0.72, green: 0.38, blue: 0.10)], startPoint: .topLeading, endPoint: .bottomTrailing)
         case .silver:
-            return LinearGradient(colors: [Color(red: 0.80, green: 0.83, blue: 0.90), Color(red: 0.58, green: 0.61, blue: 0.70)], startPoint: .top, endPoint: .bottom)
+            return LinearGradient(colors: [Color(red: 0.85, green: 0.88, blue: 0.98), Color(red: 0.60, green: 0.63, blue: 0.75)], startPoint: .topLeading, endPoint: .bottomTrailing)
         case .gold:
-            return LinearGradient(colors: [Color(red: 1.00, green: 0.85, blue: 0.28), Color(red: 0.88, green: 0.65, blue: 0.10)], startPoint: .top, endPoint: .bottom)
+            return LinearGradient(colors: [Color(red: 1.00, green: 0.85, blue: 0.20), Color(red: 0.90, green: 0.62, blue: 0.05)], startPoint: .topLeading, endPoint: .bottomTrailing)
         case .platinum:
-            return LinearGradient(colors: [Color(red: 0.00, green: 0.95, blue: 0.90), Color(red: 0.00, green: 0.70, blue: 0.75)], startPoint: .top, endPoint: .bottom)
+            return LinearGradient(colors: [Color(red: 0.00, green: 0.98, blue: 0.95), Color(red: 0.00, green: 0.65, blue: 0.72)], startPoint: .topLeading, endPoint: .bottomTrailing)
         case .diamond:
-            return LinearGradient(colors: [Color(red: 0.48, green: 0.75, blue: 1.00), Color(red: 0.25, green: 0.50, blue: 0.95)], startPoint: .top, endPoint: .bottom)
+            return LinearGradient(colors: [Color(red: 0.42, green: 0.72, blue: 1.00), Color(red: 0.20, green: 0.45, blue: 0.95)], startPoint: .topLeading, endPoint: .bottomTrailing)
         case .titan:
-            return LinearGradient(colors: [Color(red: 0.80, green: 0.40, blue: 1.00), Color(red: 0.55, green: 0.18, blue: 0.88)], startPoint: .top, endPoint: .bottom)
+            return LinearGradient(colors: [Color(red: 0.85, green: 0.35, blue: 1.00), Color(red: 0.50, green: 0.15, blue: 0.90)], startPoint: .topLeading, endPoint: .bottomTrailing)
         }
     }
 
@@ -160,7 +172,7 @@ struct CardStyle: ViewModifier {
                     .fill(Color.cardBg)
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius)
-                            .strokeBorder(Color.cardBorder, lineWidth: 1)
+                            .strokeBorder(LinearGradient.glassEdge, lineWidth: 1)
                     )
             )
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))

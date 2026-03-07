@@ -26,7 +26,7 @@ struct LogView: View {
 
     var body: some View {
         ZStack {
-            Color.appBg.ignoresSafeArea()
+            LinearGradient.screenBg.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Drag indicator
@@ -336,7 +336,7 @@ struct ExercisePickerSheet: View {
 
     var body: some View {
         ZStack {
-            Color.appBg.ignoresSafeArea()
+            LinearGradient.screenBg.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Header
@@ -487,7 +487,7 @@ struct AddExerciseSheet: View {
 
     var body: some View {
         ZStack {
-            Color.appBg.ignoresSafeArea()
+            LinearGradient.screenBg.ignoresSafeArea()
 
             VStack(spacing: 24) {
                 Text("Add Custom Exercise")

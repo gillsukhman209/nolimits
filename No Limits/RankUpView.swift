@@ -18,7 +18,7 @@ struct RankUpView: View {
 
     var body: some View {
         ZStack {
-            Color.appBg.ignoresSafeArea()
+            LinearGradient.screenBg.ignoresSafeArea()
 
             // Radial glow behind everything
             RadialGradient(

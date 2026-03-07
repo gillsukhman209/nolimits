@@ -43,7 +43,7 @@ struct ExerciseDetailView: View {
 
     var body: some View {
         ZStack {
-            Color.appBg.ignoresSafeArea()
+            LinearGradient.screenBg.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 navBar
