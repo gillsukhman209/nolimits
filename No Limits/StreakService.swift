@@ -1,34 +1,51 @@
-//
-//  StreakService.swift
-//  No Limits
-//
-//  Created by Sukhman Singh on 3/5/26.
-//
-
 import Foundation
 
 struct StreakService {
+    static func updatedStreak(
+        lastLoggedDate: Date?,
+        currentStreak: Int,
+        today: Date = .now,
+        calendar: Calendar = .current
+    ) -> Int {
+        guard let lastLoggedDate else { return 1 }
+        if calendar.isDate(lastLoggedDate, inSameDayAs: today) {
+            return currentStreak
+        }
+        guard let yesterday = calendar.date(byAdding: .day, value: -1, to: today),
+              calendar.isDate(lastLoggedDate, inSameDayAs: yesterday) else {
+            return 1
+        }
+        return currentStreak + 1
+    }
 
-    /// Returns the updated streak count.
-    /// - already logged today  → same streak (no change)
-    /// - last log was yesterday → streak + 1
-    /// - anything else          → reset to 1 (new streak starts today)
-    static func updatedStreak(lastLoggedDate: Date?, currentStreak: Int, today: Date = .now) -> Int {
-        let calendar = Calendar.current
+    static func currentStreak(
+        logDates: [Date],
+        asOf today: Date = .now,
+        calendar: Calendar = .current
+    ) -> Int {
+        let uniqueDays = Set(logDates.map { calendar.startOfDay(for: $0) })
+        guard !uniqueDays.isEmpty else { return 0 }
 
-        guard let last = lastLoggedDate else {
-            return 1  // first ever log
+        let todayStart = calendar.startOfDay(for: today)
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: todayStart)!
+        let anchor: Date
+        if uniqueDays.contains(todayStart) {
+            anchor = todayStart
+        } else if uniqueDays.contains(yesterday) {
+            anchor = yesterday
+        } else {
+            return 0
         }
 
-        if calendar.isDate(last, inSameDayAs: today) {
-            return currentStreak  // already logged today
+        var streak = 0
+        var cursor = anchor
+        while uniqueDays.contains(cursor) {
+            streak += 1
+            guard let previous = calendar.date(byAdding: .day, value: -1, to: cursor) else {
+                break
+            }
+            cursor = previous
         }
-
-        if let yesterday = calendar.date(byAdding: .day, value: -1, to: today),
-           calendar.isDate(last, inSameDayAs: yesterday) {
-            return currentStreak + 1  // consecutive day
-        }
-
-        return 1  // streak broken, start fresh
+        return streak
     }
 }

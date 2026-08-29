@@ -16,7 +16,13 @@ final class UserProfile {
     var height: Double
     var createdAt: Date
 
-    init(experience: String = "Intermediate", goal: String = "Strength", bodyweight: Double = 225, height: Double = 70, createdAt: Date = .now) {
+    init(
+        experience: String,
+        goal: String,
+        bodyweight: Double,
+        height: Double,
+        createdAt: Date = .now
+    ) {
         self.experience = experience
         self.goal = goal
         self.bodyweight = bodyweight

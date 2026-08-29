@@ -25,29 +25,29 @@ struct No_LimitsApp: App {
         }
     }()
 
+    init() {
+        FontRegistration.registerBundledFonts()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .onAppear { seedDefaultData() }
+                .onAppear { ensureSupportingData() }
         }
         .modelContainer(sharedModelContainer)
     }
 
-    private func seedDefaultData() {
+    private func ensureSupportingData() {
         let context = sharedModelContainer.mainContext
-        let profileFetch = FetchDescriptor<UserProfile>()
         let statsFetch = FetchDescriptor<AppStats>()
 
         do {
-            if try context.fetch(profileFetch).isEmpty {
-                context.insert(UserProfile())
-            }
             if try context.fetch(statsFetch).isEmpty {
                 context.insert(AppStats())
             }
             try context.save()
         } catch {
-            print("Failed to seed default data: \(error)")
+            print("Failed to initialize supporting data: \(error)")
         }
     }
 }

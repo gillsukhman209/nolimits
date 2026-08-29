@@ -1,95 +1,159 @@
-//
-//  LogViewModel.swift
-//  No Limits
-//
-//  Created by Sukhman Singh on 3/5/26.
-//
-
 import Foundation
+import Observation
 import SwiftData
 
-struct SaveResult {
-    // let xpEarned: Int  // XP disabled — uncomment to re-enable
-    let isNewPR: Bool
+struct SaveResult: Identifiable {
+    let id = UUID()
+    let exerciseName: String
     let muscleGroup: MuscleGroup
+    let side: ExerciseSide
+    let isNewPR: Bool
+    let xpEarned: Int
     let newRank: Rank
     let previousRank: Rank
-    var didRankUp: Bool { newRank != previousRank }
+    let isRankedExercise: Bool
+
+    var didRankUp: Bool {
+        guard isRankedExercise, newRank != previousRank else { return false }
+        return newRank.lowerBound > previousRank.lowerBound
+    }
 }
 
+@MainActor
 @Observable
 final class LogViewModel {
+    var selectedExercise: Exercise?
+    var selectedSide: ExerciseSide
+    var weight: String
+    var reps: String
+    var bodyweight: Double
+    var isSaving = false
 
-    var selectedExercise: Exercise? = ExerciseCatalog.all.first
-    var weight = ""
-    var reps = ""
-    var saved = false
-
-    var canSave: Bool { !weight.isEmpty && !reps.isEmpty && !saved && selectedExercise != nil }
-
-    var currentE1RM: Double {
-        let w = Double(weight) ?? 0
-        let r = Int(reps) ?? 0
-        return RankingService.calculateE1RM(weight: w, reps: r)
+    init(
+        selectedExercise: Exercise? = nil,
+        selectedSide: ExerciseSide? = nil
+    ) {
+        self.selectedExercise = selectedExercise
+        self.selectedSide = selectedSide
+            ?? (selectedExercise?.sideTracking == .separate ? .left : .both)
+        self.weight = ""
+        self.reps = ""
+        self.bodyweight = 0
     }
 
-    // MARK: - Save
+    var numericWeight: Double { Double(weight) ?? 0 }
+    var numericReps: Int { Int(reps) ?? 0 }
 
-    func saveLift(context: ModelContext) -> SaveResult? {
+    var canSave: Bool {
         guard let exercise = selectedExercise,
-              let w = Double(weight), w > 0,
-              let r = Int(reps), r > 0 else { return nil }
-
-        guard let profile = try? context.fetch(FetchDescriptor<UserProfile>()).first,
-              let stats = try? context.fetch(FetchDescriptor<AppStats>()).first else { return nil }
-
-        let muscle = exercise.muscleGroup
-        let e1RM = RankingService.calculateE1RM(weight: w, reps: r)
-
-        // Snapshot BEFORE
-        let previousBest = stats.bestE1RM(for: muscle)
-        let previousScore = RankingService.calculateScore(e1RM: previousBest, bodyweight: profile.bodyweight)
-        let previousRank = Rank.fromScore(previousScore)
-
-        // Is this a PR?
-        let isNewPR = e1RM > previousBest && previousBest > 0
-        let isFirstForMuscle = previousBest == 0
-
-        // Insert entry
-        let entry = LiftEntry(liftType: exercise.name, muscleGroup: muscle, weight: w, reps: r)
-        context.insert(entry)
-
-        // Update per-muscle best
-        if e1RM > previousBest {
-            stats.setBestE1RM(for: muscle, value: e1RM)
+              Double(weight) != nil,
+              numericReps > 0,
+              !isSaving else {
+            return false
         }
+        if exercise.sideTracking == .separate, selectedSide == .both {
+            return false
+        }
+        switch exercise.loadType {
+        case .externalWeight:
+            return numericWeight > 0
+        case .assistance:
+            return numericWeight >= 0 && bodyweight > 0
+        }
+    }
 
-        // Streak
-        let newStreak = StreakService.updatedStreak(lastLoggedDate: stats.lastLoggedDate, currentStreak: stats.streak)
-
-        // XP (commented out — uncomment to re-enable XP system)
-        // let xpEarned = RankingService.calculateXP(isNewPR: isNewPR || isFirstForMuscle, streakDays: newStreak)
-        // stats.xp += xpEarned
-
-        // Update stats
-        stats.streak = newStreak
-        stats.lastLoggedDate = .now
-        stats.totalLifts += 1
-
-        // Snapshot AFTER
-        let newBest = stats.bestE1RM(for: muscle)
-        let newScore = RankingService.calculateScore(e1RM: newBest, bodyweight: profile.bodyweight)
-        let newRank = Rank.fromScore(newScore)
-
-        try? context.save()
-        saved = true
-
-        return SaveResult(
-            // xpEarned: xpEarned,  // XP disabled
-            isNewPR: isNewPR || isFirstForMuscle,
-            muscleGroup: muscle,
-            newRank: newRank,
-            previousRank: previousRank
+    var currentE1RM: Double {
+        guard let exercise = selectedExercise else { return 0 }
+        return PerformanceService.estimatedMax(
+            weight: numericWeight,
+            reps: numericReps,
+            bodyweight: bodyweight,
+            loadType: exercise.loadType
         )
+    }
+
+    func adjustWeight(by amount: Double) {
+        let updated = max(0, numericWeight + amount)
+        weight = updated.formattedWeight
+    }
+
+    func adjustReps(by amount: Int) {
+        reps = String(max(1, numericReps + amount))
+    }
+
+    func saveLift(context: ModelContext, now: Date = .now) -> SaveResult? {
+        guard let exercise = selectedExercise, canSave else { return nil }
+        isSaving = true
+
+        let name = exercise.name
+        let exerciseEntries = (try? context.fetch(
+            FetchDescriptor<LiftEntry>(
+                predicate: #Predicate<LiftEntry> { $0.liftType == name },
+                sortBy: [SortDescriptor(\.date, order: .reverse)]
+            )
+        )) ?? []
+        let entrySide = exercise.sideTracking == .separate ? selectedSide : .both
+        let existingEntries = exerciseEntries.filter { $0.side == entrySide }
+        let allEntries = (try? context.fetch(
+            FetchDescriptor<LiftEntry>(sortBy: [SortDescriptor(\.date, order: .reverse)])
+        )) ?? []
+        let profile = try? context.fetch(FetchDescriptor<UserProfile>()).first
+
+        let previousBest = existingEntries.map(\.e1RM).max() ?? 0
+        let previousScore = RankingService.calculateScore(
+            e1RM: previousBest,
+            bodyweight: profile?.bodyweight ?? 0
+        )
+        let previousRank = Rank.fromScore(previousScore)
+        let newE1RM = currentE1RM
+        let isNewPR = PerformanceService.isPersonalBest(
+            candidate: newE1RM,
+            previousBest: previousBest
+        )
+        let hasLoggedToday = allEntries.contains {
+            Calendar.current.isDate($0.date, inSameDayAs: now)
+        }
+        let extendsStreak: Bool = {
+            guard !hasLoggedToday,
+                  let latestDate = allEntries.first?.date,
+                  let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now) else {
+                return false
+            }
+            return Calendar.current.isDate(latestDate, inSameDayAs: yesterday)
+        }()
+
+        let entry = LiftEntry(
+            date: now,
+            liftType: exercise.name,
+            muscleGroup: exercise.muscleGroup,
+            weight: numericWeight,
+            reps: numericReps,
+            loadType: exercise.loadType,
+            side: entrySide,
+            bodyweight: profile?.bodyweight ?? 0
+        )
+        context.insert(entry)
+        try? context.save()
+        AppStatsSynchronizer.rebuild(context: context)
+
+        let newScore = RankingService.calculateScore(
+            e1RM: max(previousBest, newE1RM),
+            bodyweight: profile?.bodyweight ?? 0
+        )
+        let result = SaveResult(
+            exerciseName: exercise.name,
+            muscleGroup: exercise.muscleGroup,
+            side: entrySide,
+            isNewPR: isNewPR,
+            xpEarned: RankingService.xp(
+                isNewPersonalBest: isNewPR,
+                extendsStreak: extendsStreak
+            ),
+            newRank: Rank.fromScore(newScore),
+            previousRank: previousRank,
+            isRankedExercise: ExerciseCatalog.isRanked(exercise.name)
+        )
+        isSaving = false
+        return result
     }
 }

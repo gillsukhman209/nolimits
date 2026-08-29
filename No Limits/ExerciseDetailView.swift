@@ -1,569 +1,495 @@
-//
-//  ExerciseDetailView.swift
-//  No Limits
-//
-//  Created by Sukhman Singh on 3/6/26.
-//
-
 import SwiftUI
 import SwiftData
-
-// MARK: - Weight Record
-
-struct WeightRecord: Identifiable {
-    let weight: Int
-    let bestReps: Int
-    let previousBestReps: Int?
-    let entries: [LiftEntry] // all entries at this weight, chronological
-    var id: Int { weight }
-
-    var trend: Trend {
-        guard let prev = previousBestReps else { return .new }
-        if bestReps > prev { return .up }
-        if bestReps < prev { return .down }
-        return .same
-    }
-
-    enum Trend {
-        case up, down, same, new
-    }
-}
+import Charts
 
 struct ExerciseDetailView: View {
-    let exerciseName: String
-    let muscleGroup: MuscleGroup
-    let onDismiss: () -> Void
+    enum SideScope: String, CaseIterable, Identifiable {
+        case all = "All"
+        case left = "Left"
+        case right = "Right"
 
+        var id: String { rawValue }
+
+        var side: ExerciseSide? {
+            switch self {
+            case .all: return nil
+            case .left: return .left
+            case .right: return .right
+            }
+        }
+    }
+
+    let exercise: Exercise
+    let onLog: (ExerciseSide?) -> Void
+
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @State private var allEntries: [LiftEntry] = []
-    @State private var weightRecords: [WeightRecord] = []
-    @State private var bestE1RM: Double = 0
-    @State private var bestEntry: LiftEntry?
-    @State private var selectedWeight: Int?
+    @Query private var profiles: [UserProfile]
+    @Query private var entries: [LiftEntry]
+    @State private var sideScope: SideScope = .all
+
+    init(
+        exercise: Exercise,
+        onLog: @escaping (ExerciseSide?) -> Void
+    ) {
+        self.exercise = exercise
+        self.onLog = onLog
+        let name = exercise.name
+        _entries = Query(
+            filter: #Predicate<LiftEntry> { $0.liftType == name },
+            sort: \LiftEntry.date,
+            order: .reverse
+        )
+    }
+
+    private var exerciseName: String { exercise.name }
+    private var muscleGroup: MuscleGroup { exercise.muscleGroup }
+
+    private var tracksSides: Bool {
+        exercise.sideTracking == .separate
+            || entries.contains { $0.side != .both }
+    }
+
+    private var visibleEntries: [LiftEntry] {
+        guard let side = sideScope.side else { return entries }
+        return entries.filter { $0.side == side }
+    }
+
+    private var bestEntry: LiftEntry? {
+        visibleEntries.max(by: { $0.e1RM < $1.e1RM })
+    }
+
+    private var overview: StrengthOverview {
+        LiftAnalytics.exerciseScore(
+            entries: visibleEntries,
+            bodyweight: profiles.first?.bodyweight ?? 0
+        )
+    }
+
+    private var trendEntries: [LiftEntry] {
+        Array(visibleEntries.sorted { $0.date < $1.date }.suffix(12))
+    }
+
+    private var visibleVolume: Double {
+        LiftAnalytics.totalVolume(
+            entries: visibleEntries,
+            bodyweight: profiles.first?.bodyweight ?? 0
+        )
+    }
 
     var body: some View {
-        ZStack {
-            LinearGradient.screenBg.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                navBar
-
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 20) {
-                        // Best lift hero
-                        bestLiftCard
-
-                        // Last session
-                        lastSessionCard
-
-                        // Weight records
-                        weightRecordsSection
-
-                        // Chart for selected weight
-                        if let selected = selectedWeight,
-                           let record = weightRecords.first(where: { $0.weight == selected }),
-                           record.entries.count >= 2 {
-                            repChartSection(record: record)
-                        }
-
-                        // Full history
-                        historySection
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 16)
-                    .padding(.bottom, 40)
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 24) {
+                header
+                if tracksSides {
+                    sidePicker
                 }
+                metrics
+
+                if ExerciseCatalog.isRanked(exerciseName), !visibleEntries.isEmpty {
+                    rankCard
+                }
+
+                if visibleEntries.count > 1,
+                   !tracksSides || sideScope != .all {
+                    trendCard
+                }
+
+                history
             }
+            .padding(.horizontal, 24)
+            .padding(.top, 12)
+            .padding(.bottom, 110)
         }
-        .onAppear { loadData() }
+        .background(Color.paper.ignoresSafeArea())
+        .safeAreaInset(edge: .bottom) {
+            Button {
+                let preferredSide = sideScope.side
+                    ?? (tracksSides ? .left : nil)
+                onLog(preferredSide)
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 15, weight: .black))
+                    Text(logButtonTitle)
+                        .font(.system(size: 18, weight: .black))
+                        .fontWidth(.compressed)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 58)
+            }
+            .buttonStyle(OrangeButtonStyle())
+            .padding(.horizontal, 24)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial)
+        }
+        .toolbar(.hidden, for: .navigationBar)
     }
 
-    // MARK: - Nav Bar
-
-    private var navBar: some View {
-        HStack {
-            Button(action: onDismiss) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.textSecondary)
-            }
-            Spacer()
-            VStack(spacing: 2) {
-                Text(exerciseName)
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundColor(.white)
-                Text(muscleGroup.rawValue)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.accentOrange)
-            }
-            Spacer()
-            Color.clear.frame(width: 15, height: 15)
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
+    private var logButtonTitle: String {
+        let sidePrefix = sideScope.side.map { "\($0.rawValue.uppercased()) " } ?? ""
+        return "LOG \(sidePrefix)\(exerciseName.uppercased())"
     }
 
-    // MARK: - Best Lift Card
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .black))
+                        .foregroundStyle(Color.ink)
+                        .frame(width: 42, height: 42)
+                        .background(Color.hairline.opacity(0.38), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back")
 
-    private var bestLiftCard: some View {
-        VStack(spacing: 8) {
-            Text("PERSONAL BEST")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundColor(.textSecondary)
-                .tracking(2)
+                Spacer()
 
-            if let best = bestEntry {
-                Text("\(Int(best.weight)) lbs x \(best.reps)")
-                    .font(.system(size: 36, weight: .heavy, design: .rounded))
-                    .foregroundColor(.white)
+                Text(muscleGroup.rawValue.uppercased())
+                    .font(.system(size: 11, weight: .black))
+                    .tracking(1.6)
+                    .foregroundStyle(Color.inkMuted)
+            }
 
-                Text("E1RM: \(Int(best.e1RM)) lbs")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.accentOrange)
-            } else {
-                Text("No lifts yet")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(.textSecondary)
+            HStack(alignment: .bottom, spacing: 14) {
+                ExerciseIcon(muscleGroup: muscleGroup, size: 58, inverted: true)
+                Text(exerciseName.uppercased())
+                    .editorialTitle(size: 46, lineSpacing: -5)
+                    .minimumScaleFactor(0.66)
+                    .foregroundStyle(Color.ink)
+                    .lineLimit(2)
             }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 24)
-        .background(Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(Color.accentOrange.opacity(0.12), lineWidth: 1)
+    }
+
+    private var sidePicker: some View {
+        HStack(spacing: 4) {
+            ForEach(SideScope.allCases) { scope in
+                Button {
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        sideScope = scope
+                    }
+                } label: {
+                    Text(scope.rawValue.uppercased())
+                        .font(.system(size: 12, weight: .black))
+                        .fontWidth(.condensed)
+                        .tracking(0.8)
+                        .foregroundStyle(
+                            sideScope == scope ? Color.paper : Color.inkMuted
+                        )
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                        .background(sideScope == scope ? Color.ink : Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: 11))
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(sideScope == scope ? .isSelected : [])
+            }
+        }
+        .padding(4)
+        .background(
+            Color.hairline.opacity(0.34),
+            in: RoundedRectangle(cornerRadius: 14)
         )
     }
 
-    // MARK: - Last Session Card
-
-    private var lastSessionCard: some View {
-        Group {
-            if let lastEntry = allEntries.first {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("LAST SESSION")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.textSecondary)
-                        .tracking(2)
-
-                    // Group entries by date — show the most recent day
-                    let lastDay = Calendar.current.startOfDay(for: lastEntry.date)
-                    let dayEntries = allEntries.filter {
-                        Calendar.current.startOfDay(for: $0.date) == lastDay
-                    }
-
-                    HStack {
-                        Text(formattedDate(lastEntry.date))
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.white)
-                        Spacer()
-                        Text("\(dayEntries.count) set\(dayEntries.count == 1 ? "" : "s")")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.textSecondary)
-                    }
-
-                    ForEach(dayEntries, id: \.id) { entry in
-                        HStack {
-                            Text("\(Int(entry.weight)) lbs")
-                                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                .foregroundColor(.white)
-                            Text("x")
-                                .font(.system(size: 12))
-                                .foregroundColor(.textTertiary)
-                            Text("\(entry.reps) reps")
-                                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                .foregroundColor(.white)
-                            Spacer()
-                            Text("E1RM \(Int(entry.e1RM))")
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
-                                .foregroundColor(.textSecondary)
-                        }
-                        .padding(.vertical, 6)
-                    }
-                }
-                .padding(16)
-                .background(Color.cardBg)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .strokeBorder(Color.cardBorder, lineWidth: 1)
+    @ViewBuilder
+    private var metrics: some View {
+        if tracksSides, sideScope == .all {
+            HStack(spacing: 10) {
+                sideMetric(side: .left)
+                sideMetric(side: .right)
+                MetricTile(
+                    label: "LOGS",
+                    value: "\(entries.count)",
+                    detail: entries.count == 1 ? "entry" : "entries"
+                )
+            }
+        } else {
+            HStack(spacing: 10) {
+                MetricTile(
+                    label: exercise.loadType == .assistance
+                        ? "BEST ASSIST."
+                        : "BEST SET",
+                    value: bestEntry.map {
+                        "\($0.weight.formattedWeight) × \($0.reps)"
+                    } ?? "—",
+                    detail: "lb × reps"
+                )
+                MetricTile(
+                    label: exercise.loadType == .assistance
+                        ? "EFFECTIVE MAX"
+                        : "EST. MAX",
+                    value: bestEntry.map { $0.e1RM.formattedWeight } ?? "—",
+                    detail: "lb"
+                )
+                MetricTile(
+                    label: "LOGS",
+                    value: "\(visibleEntries.count)",
+                    detail: visibleEntries.count == 1 ? "entry" : "entries"
                 )
             }
         }
     }
 
-    // MARK: - Weight Records
-
-    private var weightRecordsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("RECORDS BY WEIGHT")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundColor(.textSecondary)
-                .tracking(2)
-
-            if weightRecords.isEmpty {
-                Text("Log some lifts to see your records")
-                    .font(.system(size: 14))
-                    .foregroundColor(.textSecondary)
-                    .padding(.vertical, 16)
-            } else {
-                ForEach(weightRecords) { record in
-                    Button(action: {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            selectedWeight = selectedWeight == record.weight ? nil : record.weight
-                        }
-                    }) {
-                        weightRecordRow(record: record)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
-
-    private func weightRecordRow(record: WeightRecord) -> some View {
-        HStack(spacing: 12) {
-            // Weight
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(record.weight) lbs")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                Text("\(record.entries.count) log\(record.entries.count == 1 ? "" : "s")")
-                    .font(.system(size: 11))
-                    .foregroundColor(.textTertiary)
-            }
-
-            Spacer()
-
-            // Best reps
-            Text("\(record.bestReps) reps")
-                .font(.system(size: 18, weight: .heavy, design: .rounded))
-                .foregroundColor(.white)
-
-            // Trend indicator
-            trendBadge(record.trend)
-
-            // Expand indicator
-            Image(systemName: selectedWeight == record.weight ? "chevron.down" : "chevron.right")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.textTertiary)
-        }
-        .padding(14)
-        .background(selectedWeight == record.weight ? Color.surfaceBg : Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(
-                    selectedWeight == record.weight ? Color.accentOrange.opacity(0.2) : Color.cardBorder,
-                    lineWidth: 1
-                )
+    private func sideMetric(side: ExerciseSide) -> some View {
+        let best = entries
+            .filter { $0.side == side }
+            .max(by: { $0.e1RM < $1.e1RM })
+        return MetricTile(
+            label: "\(side.rawValue.uppercased()) PB",
+            value: best.map {
+                "\($0.weight.formattedWeight) × \($0.reps)"
+            } ?? "—",
+            detail: "lb × reps"
         )
     }
 
-    private func trendBadge(_ trend: WeightRecord.Trend) -> some View {
-        Group {
-            switch trend {
-            case .up:
-                HStack(spacing: 3) {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 9, weight: .bold))
-                    Text("PR")
-                        .font(.system(size: 10, weight: .bold))
+    private var rankCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("EXERCISE RANK")
+                        .sectionEyebrow()
+                    Text(overview.rank.rawValue.uppercased())
+                        .font(.system(size: 30, weight: .black))
+                        .fontWidth(.compressed)
+                        .foregroundStyle(Color.ink)
                 }
-                .foregroundColor(.green)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.green.opacity(0.12))
-                .clipShape(Capsule())
-            case .down:
-                Image(systemName: "arrow.down")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.accentRed)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.accentRed.opacity(0.12))
-                    .clipShape(Capsule())
-            case .same:
-                Image(systemName: "equal")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.textSecondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.surfaceBg)
-                    .clipShape(Capsule())
-            case .new:
-                Text("NEW")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.accentOrange)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.accentOrange.opacity(0.12))
-                    .clipShape(Capsule())
+                Spacer()
+                Text(String(format: "%.2f×", overview.score))
+                    .font(.system(size: 30, weight: .black))
+                    .fontWidth(.compressed)
+                    .foregroundStyle(overview.rank.color)
             }
-        }
-    }
 
-    // MARK: - Rep Chart for Selected Weight
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.hairline.opacity(0.5))
+                    Capsule()
+                        .fill(Color.signalOrange)
+                        .frame(width: max(8, geometry.size.width * overview.progress))
+                }
+            }
+            .frame(height: 8)
 
-    private func repChartSection(record: WeightRecord) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("REPS AT \(record.weight) LBS")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundColor(.textSecondary)
-                .tracking(2)
-
-            RepChartView(entries: record.entries)
-                .frame(height: 160)
+            HStack {
+                Text("\(Int(overview.progress * 100))% through \(overview.rank.rawValue)")
+                Spacer()
+                Text(overview.rank.nextRank.map { "Next: \($0.rawValue)" } ?? "Top rank")
+            }
+            .font(.system(size: 12, weight: .bold))
+            .foregroundStyle(Color.inkMuted)
         }
         .padding(18)
-        .background(Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(Color.accentOrange.opacity(0.12), lineWidth: 1)
-        )
-        .transition(.opacity.combined(with: .move(edge: .top)))
+        .cardStyle(cornerRadius: 18)
     }
 
-    // MARK: - Full History
+    private var trendCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(
+                    exercise.loadType == .assistance
+                        ? "EFFECTIVE LOAD TREND"
+                        : "E1RM TREND"
+                )
+                    .sectionEyebrow()
+                Spacer()
+                if let change = LiftAnalytics.changePercent(entries: visibleEntries) {
+                    Text("\(change >= 0 ? "+" : "")\(change, format: .number.precision(.fractionLength(1)))%")
+                        .font(.system(size: 13, weight: .black))
+                        .foregroundStyle(change >= 0 ? Color.success : Color.inkMuted)
+                }
+            }
 
-    private var historySection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("ALL HISTORY")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundColor(.textSecondary)
-                .tracking(2)
-
-            if allEntries.isEmpty {
-                Text("No entries yet")
-                    .font(.system(size: 14))
-                    .foregroundColor(.textSecondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
-            } else {
-                ForEach(allEntries, id: \.id) { entry in
-                    HStack {
-                        Text(formattedDate(entry.date))
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.textSecondary)
-                            .frame(width: 70, alignment: .leading)
-                        Spacer()
-                        Text("\(Int(entry.weight)) lbs")
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
-                            .foregroundColor(.white)
-                        Text("x")
-                            .font(.system(size: 11))
-                            .foregroundColor(.textTertiary)
-                        Text("\(entry.reps)")
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
-                            .foregroundColor(.white)
-                            .frame(width: 30, alignment: .trailing)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 11)
-                    .background(Color.cardBg)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .strokeBorder(Color.cardBorder, lineWidth: 1)
+            Chart(trendEntries, id: \.id) { entry in
+                AreaMark(
+                    x: .value("Date", entry.date),
+                    y: .value("Performance max", entry.e1RM)
+                )
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [.signalOrange.opacity(0.28), .signalOrange.opacity(0.02)],
+                        startPoint: .top,
+                        endPoint: .bottom
                     )
-                    .contextMenu {
-                        Button(role: .destructive) {
-                            deleteEntry(entry)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                    }
+                )
+
+                LineMark(
+                    x: .value("Date", entry.date),
+                    y: .value("Performance max", entry.e1RM)
+                )
+                .foregroundStyle(Color.signalOrange)
+                .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+
+                PointMark(
+                    x: .value("Date", entry.date),
+                    y: .value("Performance max", entry.e1RM)
+                )
+                .foregroundStyle(Color.ink)
+                .symbolSize(24)
+            }
+            .chartXAxis(.hidden)
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) {
+                    AxisGridLine().foregroundStyle(Color.hairline.opacity(0.55))
+                    AxisValueLabel()
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(Color.inkMuted)
+                }
+            }
+            .frame(height: 150)
+            .accessibilityLabel(
+                exercise.loadType == .assistance
+                    ? "Effective load trend"
+                    : "Estimated one rep max trend"
+            )
+        }
+        .padding(18)
+        .cardStyle(cornerRadius: 18)
+    }
+
+    private var history: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("ALL LOGS")
+                    .sectionEyebrow()
+                Spacer()
+                if !visibleEntries.isEmpty {
+                    Text("\(visibleVolume.formattedWeight) lb work")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.inkMuted)
+                }
+            }
+
+            if visibleEntries.isEmpty {
+                Text(emptyHistoryMessage)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.inkMuted)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 34)
+                    .cardStyle(cornerRadius: 18)
+            } else {
+                ForEach(visibleEntries, id: \.id) { entry in
+                    ExerciseLogRow(
+                        entry: entry,
+                        isPersonalBest: isPersonalBest(entry),
+                        onDelete: { delete(entry) }
+                    )
                 }
             }
         }
     }
 
-    // MARK: - Data Loading
-
-    private func loadData() {
-        let name = exerciseName
-        var descriptor = FetchDescriptor<LiftEntry>(
-            predicate: #Predicate<LiftEntry> { $0.liftType == name },
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
-        )
-        descriptor.fetchLimit = 100
-        allEntries = (try? modelContext.fetch(descriptor)) ?? []
-
-        // Best entry by e1RM
-        bestEntry = allEntries.max(by: { $0.e1RM < $1.e1RM })
-        bestE1RM = bestEntry?.e1RM ?? 0
-
-        // Build weight records
-        buildWeightRecords()
+    private var emptyHistoryMessage: String {
+        if let side = sideScope.side {
+            return "No \(side.rawValue.lowercased())-side logs yet."
+        }
+        return "No \(exerciseName) logs yet."
     }
 
-    private func buildWeightRecords() {
-        // Group entries by rounded weight
-        var grouped: [Int: [LiftEntry]] = [:]
-        for entry in allEntries {
-            let w = Int(entry.weight)
-            grouped[w, default: []].append(entry)
-        }
-
-        weightRecords = grouped.map { weight, entries in
-            // Sort chronologically for this weight
-            let sorted = entries.sorted { $0.date < $1.date }
-            let bestReps = sorted.map(\.reps).max() ?? 0
-
-            // Previous best = best reps before the most recent entry
-            let previousBestReps: Int? = {
-                guard sorted.count >= 2 else { return nil }
-                let allButLast = sorted.dropLast()
-                return allButLast.map(\.reps).max()
-            }()
-
-            return WeightRecord(
-                weight: weight,
-                bestReps: bestReps,
-                previousBestReps: previousBestReps,
-                entries: sorted
-            )
-        }
-        .sorted { $0.weight > $1.weight } // heaviest first
+    private func isPersonalBest(_ entry: LiftEntry) -> Bool {
+        let comparableEntries = tracksSides
+            ? entries.filter { $0.side == entry.side }
+            : entries
+        return entry.id == comparableEntries.max(by: { $0.e1RM < $1.e1RM })?.id
     }
 
-    private func deleteEntry(_ entry: LiftEntry) {
-        let muscle = entry.muscleGroup
-        modelContext.delete(entry)
-
-        // Update totalLifts
-        if let stats = try? modelContext.fetch(FetchDescriptor<AppStats>()).first {
-            stats.totalLifts = max(stats.totalLifts - 1, 0)
-
-            // Recalculate best e1RM for this muscle group from remaining entries
-            if let muscle = muscle {
-                let muscleName = muscle.rawValue
-                var desc = FetchDescriptor<LiftEntry>(
-                    predicate: #Predicate<LiftEntry> { $0.muscleGroupRaw == muscleName }
-                )
-                desc.fetchLimit = 500
-                let remaining = (try? modelContext.fetch(desc)) ?? []
-                let newBest = remaining.map(\.e1RM).max() ?? 0
-                stats.setBestE1RM(for: muscle, value: newBest)
-            }
+    private func delete(_ entry: LiftEntry) {
+        withAnimation(.easeOut(duration: 0.2)) {
+            AppStatsSynchronizer.delete(entry, context: modelContext)
         }
-
-        try? modelContext.save()
-        loadData()
-    }
-
-    private func formattedDate(_ date: Date) -> String {
-        let cal = Calendar.current
-        if cal.isDateInToday(date) { return "Today" }
-        if cal.isDateInYesterday(date) { return "Yesterday" }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d"
-        return formatter.string(from: date)
     }
 }
 
-// MARK: - Rep Chart (reps over time at a specific weight)
-
-struct RepChartView: View {
-    let entries: [LiftEntry]
+struct MetricTile: View {
+    let label: String
+    let value: String
+    let detail: String
 
     var body: some View {
-        GeometryReader { geo in
-            let data = entries.map { $0.reps }
-            let minVal = max((data.min() ?? 0) - 2, 0)
-            let maxVal = (data.max() ?? 1) + 2
-            let range = max(Double(maxVal - minVal), 1)
-            let w = geo.size.width
-            let h = geo.size.height
-            let count = data.count
+        VStack(alignment: .leading, spacing: 5) {
+            Text(label)
+                .font(.system(size: 10, weight: .black))
+                .tracking(1.3)
+                .foregroundStyle(Color.inkMuted)
+            Text(value)
+                .font(.system(size: 21, weight: .black))
+                .fontWidth(.compressed)
+                .foregroundStyle(Color.ink)
+                .minimumScaleFactor(0.65)
+                .lineLimit(1)
+            Text(detail)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(Color.inkFaint)
+        }
+        .padding(13)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle(cornerRadius: 15)
+    }
+}
 
-            ZStack(alignment: .topLeading) {
-                // Grid lines
-                ForEach(0..<4, id: \.self) { i in
-                    let y = h * CGFloat(i) / 3.0
-                    Path { p in
-                        p.move(to: CGPoint(x: 0, y: y))
-                        p.addLine(to: CGPoint(x: w, y: y))
-                    }
-                    .stroke(Color.white.opacity(0.04), lineWidth: 1)
+struct ExerciseLogRow: View {
+    let entry: LiftEntry
+    let isPersonalBest: Bool
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(entry.date.formatted(date: .abbreviated, time: .omitted).uppercased())
+                    .font(.system(size: 11, weight: .black))
+                    .tracking(1)
+                    .foregroundStyle(Color.inkMuted)
+                Text(entry.date.formatted(date: .omitted, time: .shortened))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Color.inkFaint)
+            }
+
+            Spacer()
+
+            if isPersonalBest {
+                Text("PB")
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundStyle(Color.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(Color.signalOrange, in: Capsule())
+            }
+
+            if entry.side != .both {
+                Text(entry.side.shortLabel)
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundStyle(Color.ink)
+                    .frame(width: 26, height: 26)
+                    .background(Color.hairline.opacity(0.55), in: Circle())
+                    .accessibilityLabel(entry.side.rawValue)
+            }
+
+            Text(loadDescription)
+                .font(.system(size: 19, weight: .black))
+                .fontWidth(.condensed)
+                .foregroundStyle(Color.ink)
+
+            Menu {
+                Button(role: .destructive, action: onDelete) {
+                    Label("Delete log", systemImage: "trash")
                 }
-
-                if count > 1 {
-                    // Gradient fill
-                    Path { path in
-                        for (i, val) in data.enumerated() {
-                            let x = w * CGFloat(i) / CGFloat(count - 1)
-                            let y = h - h * CGFloat(Double(val - minVal) / range)
-                            if i == 0 { path.move(to: CGPoint(x: x, y: y)) }
-                            else { path.addLine(to: CGPoint(x: x, y: y)) }
-                        }
-                        path.addLine(to: CGPoint(x: w, y: h))
-                        path.addLine(to: CGPoint(x: 0, y: h))
-                        path.closeSubpath()
-                    }
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.accentOrange.opacity(0.15), Color.accentOrange.opacity(0.0)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-
-                    // Line
-                    Path { path in
-                        for (i, val) in data.enumerated() {
-                            let x = w * CGFloat(i) / CGFloat(count - 1)
-                            let y = h - h * CGFloat(Double(val - minVal) / range)
-                            if i == 0 { path.move(to: CGPoint(x: x, y: y)) }
-                            else { path.addLine(to: CGPoint(x: x, y: y)) }
-                        }
-                    }
-                    .stroke(Color.accentOrange, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-
-                    // Dots with rep labels
-                    ForEach(Array(data.enumerated()), id: \.offset) { i, val in
-                        let x = w * CGFloat(i) / CGFloat(count - 1)
-                        let y = h - h * CGFloat(Double(val - minVal) / range)
-
-                        Circle()
-                            .fill(Color.accentOrange)
-                            .frame(width: 7, height: 7)
-                            .position(x: x, y: y)
-
-                        Text("\(val)")
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
-                            .position(x: x, y: y - 14)
-                    }
-                } else if count == 1 {
-                    let val = data[0]
-                    let x = w / 2
-                    let y = h / 2
-                    Circle()
-                        .fill(Color.accentOrange)
-                        .frame(width: 8, height: 8)
-                        .position(x: x, y: y)
-                    Text("\(val) reps")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                        .position(x: x, y: y - 16)
-                }
-
-                // Y-axis labels
-                VStack {
-                    Text("\(maxVal)")
-                        .font(.system(size: 9, weight: .medium, design: .rounded))
-                        .foregroundColor(.textTertiary)
-                    Spacer()
-                    Text("\(minVal)")
-                        .font(.system(size: 9, weight: .medium, design: .rounded))
-                        .foregroundColor(.textTertiary)
-                }
-                .frame(height: h)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Color.inkMuted)
+                    .frame(width: 28, height: 38)
             }
         }
+        .padding(14)
+        .cardStyle(cornerRadius: 15)
+    }
+
+    private var loadDescription: String {
+        let suffix = entry.loadType == .assistance ? " assist" : ""
+        return "\(entry.weight.formattedWeight) lb\(suffix) × \(entry.reps)"
     }
 }

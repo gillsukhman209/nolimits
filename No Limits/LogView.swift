@@ -1,582 +1,692 @@
-//
-//  LogView.swift
-//  No Limits
-//
-//  Created by Sukhman Singh on 3/5/26.
-//
-
 import SwiftUI
 import SwiftData
 import UIKit
 
 struct LogView: View {
-    let onDismiss: () -> Void
-    let onRankUp: ((Rank, MuscleGroup) -> Void)?
+    enum Field {
+        case weight
+        case reps
+    }
 
+    let onSaved: (SaveResult) -> Void
+
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @State private var vm = LogViewModel()
-    @State private var saveResult: SaveResult?
-    @State private var showSaveToast = false
+    @Query(sort: \LiftEntry.date, order: .reverse) private var entries: [LiftEntry]
+    @Query private var profiles: [UserProfile]
+    @State private var vm: LogViewModel
     @State private var showExercisePicker = false
+    @FocusState private var focusedField: Field?
 
-    init(onDismiss: @escaping () -> Void, onRankUp: ((Rank, MuscleGroup) -> Void)? = nil) {
-        self.onDismiss = onDismiss
-        self.onRankUp = onRankUp
+    init(
+        preselectedExercise: Exercise? = nil,
+        preselectedSide: ExerciseSide? = nil,
+        onSaved: @escaping (SaveResult) -> Void
+    ) {
+        self.onSaved = onSaved
+        _vm = State(
+            initialValue: LogViewModel(
+                selectedExercise: preselectedExercise,
+                selectedSide: preselectedSide
+            )
+        )
+    }
+
+    private var exerciseEntries: [LiftEntry] {
+        guard let exercise = vm.selectedExercise else { return [] }
+        return entries.filter {
+            guard $0.liftType == exercise.name else { return false }
+            if exercise.sideTracking == .separate {
+                return $0.side == vm.selectedSide
+            }
+            return true
+        }
+    }
+
+    private var latestExerciseEntry: LiftEntry? { exerciseEntries.first }
+    private var bestExerciseEntry: LiftEntry? {
+        exerciseEntries.max(by: { $0.e1RM < $1.e1RM })
     }
 
     var body: some View {
-        ZStack {
-            LinearGradient.screenBg.ignoresSafeArea()
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 24) {
+                    header
+                    exerciseSelector
 
-            VStack(spacing: 0) {
-                // Drag indicator
-                Capsule()
-                    .fill(Color.white.opacity(0.15))
-                    .frame(width: 36, height: 4)
-                    .padding(.top, 12)
-
-                // Close & title
-                HStack {
-                    Button(action: onDismiss) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.textSecondary)
+                    if vm.selectedExercise?.sideTracking == .separate {
+                        sideSelector
                     }
-                    Spacer()
-                    Text("Log Lift")
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundColor(.white)
-                    Spacer()
-                    Color.clear.frame(width: 15, height: 15)
+
+                    if vm.selectedExercise?.loadType == .assistance {
+                        assistanceGuidance
+                    }
+
+                    if let latestExerciseEntry {
+                        previousPerformance(latestExerciseEntry)
+                    }
+
+                    inputSection
+
+                    if vm.currentE1RM > 0 {
+                        estimateCard
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    }
                 }
                 .padding(.horizontal, 24)
-                .padding(.top, 20)
-
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        // Exercise pill
-                        exercisePill
-                            .padding(.top, 32)
-                            .padding(.horizontal, 24)
-
-                        // Weight & reps — stacked vertically, large
-                        inputArea
-                            .padding(.top, 40)
-                            .padding(.horizontal, 24)
-
-                        // Score preview
-                        if !vm.weight.isEmpty && !vm.reps.isEmpty {
-                            scorePreview
-                                .padding(.top, 32)
-                                .padding(.horizontal, 24)
-                                .transition(.opacity.combined(with: .move(edge: .bottom)))
-                        }
-                    }
-                    .padding(.bottom, 24)
-                }
-                .animation(.easeInOut(duration: 0.25), value: vm.weight.isEmpty || vm.reps.isEmpty)
-
-                Spacer()
-
-                // Save button
-                saveButton
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 48)
+                .padding(.top, 18)
+                .padding(.bottom, 120)
             }
-
-            if showSaveToast, let result = saveResult {
-                VStack {
+            .background(Color.paper)
+            .safeAreaInset(edge: .bottom) {
+                saveButton
+            }
+            .toolbar(.hidden, for: .navigationBar)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
-                    saveToast(result: result)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                        .padding(.bottom, 120)
+                    Button("Done") { focusedField = nil }
                 }
-                .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showSaveToast)
             }
         }
+        .presentationCornerRadius(30)
         .sheet(isPresented: $showExercisePicker) {
             ExercisePickerSheet(selected: $vm.selectedExercise)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+        }
+        .onAppear {
+            vm.bodyweight = profiles.first?.bodyweight ?? 0
+            prefillLatestSet(replacingCurrentValues: false)
+        }
+        .onChange(of: vm.selectedExercise?.name) {
+            configureSideForSelectedExercise()
+            prefillLatestSet(replacingCurrentValues: true)
+        }
+        .onChange(of: vm.selectedSide) {
+            prefillLatestSet(replacingCurrentValues: true)
+        }
+        .onChange(of: profiles.first?.bodyweight) {
+            vm.bodyweight = profiles.first?.bodyweight ?? 0
         }
     }
 
-    // MARK: - Exercise Pill
+    private var header: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("NEW LIFT")
+                    .sectionEyebrow()
+                Text("Make it count.")
+                    .font(.system(size: 34, weight: .black))
+                    .fontWidth(.compressed)
+                    .foregroundStyle(Color.ink)
+            }
 
-    private var exercisePill: some View {
-        Button(action: { showExercisePicker = true }) {
-            HStack(spacing: 12) {
-                // Icon circle
-                ZStack {
-                    Circle()
-                        .fill(Color.accentOrange.opacity(0.10))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "dumbbell.fill")
-                        .font(.system(size: 15))
-                        .foregroundColor(.accentOrange)
+            Spacer()
+
+            Button { dismiss() } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Color.ink)
+                    .frame(width: 42, height: 42)
+                    .background(Color.hairline.opacity(0.38), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close")
+        }
+    }
+
+    private var exerciseSelector: some View {
+        Button { showExercisePicker = true } label: {
+            HStack(spacing: 14) {
+                if let muscleGroup = vm.selectedExercise?.muscleGroup {
+                    ExerciseIcon(muscleGroup: muscleGroup, size: 52, inverted: true)
+                } else {
+                    Image(systemName: "plus")
+                        .font(.system(size: 19, weight: .black))
+                        .foregroundStyle(Color.paper)
+                        .frame(width: 52, height: 52)
+                        .background(Color.ink, in: Circle())
                 }
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(vm.selectedExercise?.name ?? "Choose exercise")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(.white)
-                    if let muscle = vm.selectedExercise?.muscleGroup {
-                        Text(muscle.rawValue)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.accentOrange)
-                    } else {
-                        Text("Tap to select")
-                            .font(.system(size: 12))
-                            .foregroundColor(.textSecondary)
-                    }
+                        .font(.system(size: 20, weight: .black))
+                        .fontWidth(.condensed)
+                        .foregroundStyle(Color.ink)
+
+                    Text(vm.selectedExercise.map {
+                        if ExerciseCatalog.isRanked($0.name) {
+                            return "\($0.muscleGroup.rawValue) · Ranked lift"
+                        }
+                        if $0.loadType == .assistance {
+                            return "\($0.muscleGroup.rawValue) · Lower is harder"
+                        }
+                        if $0.sideTracking == .separate {
+                            return "\($0.muscleGroup.rawValue) · Track each side"
+                        }
+                        return $0.muscleGroup.rawValue
+                    } ?? "Search or pick a recent exercise")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Color.inkMuted)
                 }
 
                 Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.textTertiary)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 13, weight: .black))
+                    .foregroundStyle(Color.ink)
             }
             .padding(16)
-            .background(Color.cardBg)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(Color.cardBorder, lineWidth: 1)
-            )
+            .cardStyle(cornerRadius: 18)
         }
         .buttonStyle(.plain)
     }
 
-    // MARK: - Input Area
+    private var sideSelector: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("SIDE")
+                .sectionEyebrow()
 
-    private var inputArea: some View {
-        VStack(spacing: 32) {
-            // Weight — centered, large
-            VStack(spacing: 6) {
-                Text("WEIGHT")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.textSecondary)
-                    .tracking(3)
-
-                HStack(alignment: .lastTextBaseline, spacing: 4) {
-                    TextField("0", text: $vm.weight)
-                        .font(.system(size: 64, weight: .heavy, design: .rounded))
-                        .foregroundColor(.white)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.center)
-                    Text("lbs")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(.textTertiary)
-                        .padding(.bottom, 8)
+            HStack(spacing: 8) {
+                ForEach([ExerciseSide.left, .right]) { side in
+                    Button {
+                        withAnimation(.easeOut(duration: 0.18)) {
+                            vm.selectedSide = side
+                        }
+                    } label: {
+                        Text(side.rawValue.uppercased())
+                            .font(.system(size: 15, weight: .black))
+                            .fontWidth(.condensed)
+                            .foregroundStyle(
+                                vm.selectedSide == side ? Color.paper : Color.ink
+                            )
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 46)
+                            .background(
+                                vm.selectedSide == side
+                                    ? Color.ink
+                                    : Color.hairline.opacity(0.32),
+                                in: RoundedRectangle(cornerRadius: 13)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(
+                        vm.selectedSide == side ? .isSelected : []
+                    )
                 }
-                .frame(maxWidth: .infinity)
-            }
-
-            // Thin separator
-            Rectangle()
-                .fill(Color.white.opacity(0.04))
-                .frame(height: 1)
-                .padding(.horizontal, 40)
-
-            // Reps — centered, large
-            VStack(spacing: 6) {
-                Text("REPS")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.textSecondary)
-                    .tracking(3)
-
-                HStack(alignment: .lastTextBaseline, spacing: 4) {
-                    TextField("0", text: $vm.reps)
-                        .font(.system(size: 64, weight: .heavy, design: .rounded))
-                        .foregroundColor(.white)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.center)
-                    Text("reps")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(.textTertiary)
-                        .padding(.bottom, 8)
-                }
-                .frame(maxWidth: .infinity)
             }
         }
     }
 
-    // MARK: - Score Preview
+    private var assistanceGuidance: some View {
+        HStack(alignment: .top, spacing: 11) {
+            Image(systemName: "arrow.down")
+                .font(.system(size: 13, weight: .black))
+                .foregroundStyle(Color.signalOrange)
+                .frame(width: 28, height: 28)
+                .background(Color.signalOrange.opacity(0.12), in: Circle())
 
-    private var scorePreview: some View {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("LOWER ASSISTANCE IS HARDER")
+                    .font(.system(size: 12, weight: .black))
+                    .fontWidth(.condensed)
+                    .tracking(0.7)
+                    .foregroundStyle(Color.ink)
+                Text("Your score uses bodyweight minus assistance, then adjusts for reps.")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.inkMuted)
+            }
+        }
+        .padding(14)
+        .background(Color.signalOrange.opacity(0.08), in: RoundedRectangle(cornerRadius: 15))
+    }
+
+    private func previousPerformance(_ entry: LiftEntry) -> some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("EST. 1RM")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.textSecondary)
-                    .tracking(1)
-                Text("\(Int(vm.currentE1RM)) lbs")
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("LAST TIME")
+                    .sectionEyebrow()
+                Text("\(entry.weight.formattedWeight) lb × \(entry.reps)")
+                    .font(.system(size: 17, weight: .bold))
+                    .fontWidth(.condensed)
+                    .foregroundStyle(Color.ink)
             }
             Spacer()
-            VStack(alignment: .trailing, spacing: 4) {
-                Text("TARGETS")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.textSecondary)
-                    .tracking(1)
-                Text(vm.selectedExercise?.muscleGroup.rawValue ?? "")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.accentOrange)
+            if let bestExerciseEntry {
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text(
+                        vm.selectedExercise?.loadType == .assistance
+                            ? "BEST EFFECTIVE MAX"
+                            : "BEST E1RM"
+                    )
+                        .sectionEyebrow()
+                    Text("\(bestExerciseEntry.e1RM.formattedWeight) lb")
+                        .font(.system(size: 17, weight: .bold))
+                        .fontWidth(.condensed)
+                        .foregroundStyle(Color.ink)
+                }
+            }
+        }
+        .padding(.horizontal, 2)
+    }
+
+    private var inputSection: some View {
+        HStack(spacing: 12) {
+            numberInput(
+                title: vm.selectedExercise?.loadType.inputLabel ?? "WEIGHT",
+                value: $vm.weight,
+                unit: "LB",
+                field: .weight,
+                decrement: { vm.adjustWeight(by: -5) },
+                increment: { vm.adjustWeight(by: 5) }
+            )
+
+            numberInput(
+                title: "REPS",
+                value: $vm.reps,
+                unit: "REPS",
+                field: .reps,
+                decrement: { vm.adjustReps(by: -1) },
+                increment: { vm.adjustReps(by: 1) }
+            )
+        }
+    }
+
+    private func numberInput(
+        title: String,
+        value: Binding<String>,
+        unit: String,
+        field: Field,
+        decrement: @escaping () -> Void,
+        increment: @escaping () -> Void
+    ) -> some View {
+        VStack(spacing: 12) {
+            Text(title)
+                .sectionEyebrow()
+
+            TextField("0", text: value)
+                .font(.system(size: 44, weight: .black))
+                .fontWidth(.compressed)
+                .foregroundStyle(Color.ink)
+                .multilineTextAlignment(.center)
+                .keyboardType(field == .weight ? .decimalPad : .numberPad)
+                .focused($focusedField, equals: field)
+                .minimumScaleFactor(0.65)
+
+            Text(unit)
+                .font(.system(size: 11, weight: .bold))
+                .tracking(1.2)
+                .foregroundStyle(Color.inkMuted)
+
+            HStack(spacing: 8) {
+                stepButton(icon: "minus", action: decrement)
+                stepButton(icon: "plus", action: increment)
+            }
+        }
+        .padding(.vertical, 18)
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity)
+        .cardStyle(cornerRadius: 18)
+    }
+
+    private func stepButton(icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .black))
+                .foregroundStyle(Color.ink)
+                .frame(maxWidth: .infinity)
+                .frame(height: 36)
+                .background(Color.hairline.opacity(0.35), in: RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var estimateCard: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(
+                    vm.selectedExercise?.loadType.metricLabel
+                        ?? "ESTIMATED 1 REP MAX"
+                )
+                    .sectionEyebrow()
+                Text("\(vm.currentE1RM.formattedWeight) lb")
+                    .font(.system(size: 28, weight: .black))
+                    .fontWidth(.compressed)
+                    .foregroundStyle(Color.ink)
+            }
+
+            Spacer()
+
+            if let bestExerciseEntry {
+                let difference = vm.currentE1RM - bestExerciseEntry.e1RM
+                Text(difference > 0 ? "+\(difference.formattedWeight) PR" : "PB \(bestExerciseEntry.e1RM.formattedWeight)")
+                    .font(.system(size: 12, weight: .black))
+                    .fontWidth(.condensed)
+                    .foregroundStyle(difference > 0 ? Color.white : Color.ink)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(difference > 0 ? Color.signalOrange : Color.hairline.opacity(0.45), in: Capsule())
             }
         }
         .padding(18)
-        .background(Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(Color.accentOrange.opacity(0.12), lineWidth: 1)
-        )
+        .cardStyle(cornerRadius: 18)
     }
-
-    // MARK: - Save Button
 
     private var saveButton: some View {
-        Button(action: handleSave) {
-            Group {
-                if vm.saved {
-                    HStack(spacing: 8) {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 16, weight: .bold))
-                        Text("Saved!")
-                            .font(.system(size: 17, weight: .semibold))
-                    }
-                } else {
-                    Text("Save Lift")
-                        .font(.system(size: 17, weight: .semibold))
-                }
+        Button(action: save) {
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 16, weight: .black))
+                Text("SAVE LIFT")
+                    .font(.system(size: 20, weight: .black))
+                    .fontWidth(.compressed)
+                    .tracking(0.7)
             }
-            .foregroundColor(vm.saved ? .white : (vm.canSave ? .black : .textSecondary))
             .frame(maxWidth: .infinity)
-            .frame(height: 56)
-            .background(
-                vm.saved ? AnyShapeStyle(Color.green) :
-                vm.canSave ? AnyShapeStyle(LinearGradient.accent) :
-                AnyShapeStyle(Color.surfaceBg)
-            )
-            .clipShape(Capsule())
+            .frame(height: 62)
+            .opacity(vm.canSave ? 1 : 0.45)
         }
+        .buttonStyle(OrangeButtonStyle())
         .disabled(!vm.canSave)
-        .animation(.easeInOut(duration: 0.2), value: vm.saved)
-    }
-
-    // MARK: - Save Toast
-
-    private func saveToast(result: SaveResult) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: result.isNewPR ? "trophy.fill" : "checkmark.circle.fill")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundColor(result.isNewPR ? .accentOrange : .green)
-            Text(result.isNewPR ? "New \(result.muscleGroup.rawValue) PR!" : "Lift Saved")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.white)
-            Spacer()
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
-        .background(Color.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(Color.cardBorder, lineWidth: 1)
-        )
         .padding(.horizontal, 24)
+        .padding(.vertical, 12)
+        .background(.ultraThinMaterial)
     }
 
-    // MARK: - Save Logic
-
-    private func handleSave() {
+    private func save() {
+        focusedField = nil
         guard let result = vm.saveLift(context: modelContext) else { return }
-        saveResult = result
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        onSaved(result)
+    }
 
-        let impact = UIImpactFeedbackGenerator(style: result.isNewPR ? .heavy : .medium)
-        impact.impactOccurred()
-
-        withAnimation { showSaveToast = true }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            withAnimation { showSaveToast = false }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                if result.didRankUp {
-                    onRankUp?(result.newRank, result.muscleGroup)
-                } else {
-                    onDismiss()
-                }
+    private func prefillLatestSet(replacingCurrentValues: Bool) {
+        guard let latest = exerciseEntries.first else {
+            if replacingCurrentValues {
+                vm.weight = ""
+                vm.reps = ""
             }
+            return
         }
+        if replacingCurrentValues || vm.weight.isEmpty {
+            vm.weight = latest.weight.formattedWeight
+        }
+        if replacingCurrentValues || vm.reps.isEmpty {
+            vm.reps = String(latest.reps)
+        }
+    }
+
+    private func configureSideForSelectedExercise() {
+        guard let exercise = vm.selectedExercise else {
+            vm.selectedSide = .both
+            return
+        }
+        vm.selectedSide = exercise.sideTracking == .separate ? .left : .both
     }
 }
-
-// MARK: - Exercise Picker Sheet
 
 struct ExercisePickerSheet: View {
     @Binding var selected: Exercise?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \LiftEntry.date, order: .reverse) private var entries: [LiftEntry]
     @State private var searchText = ""
-    @State private var showAddSheet = false
+    @State private var showAddExercise = false
 
-    private var allGrouped: [(MuscleGroup, [Exercise])] {
-        ExerciseCatalog.grouped(context: modelContext)
+    private var allExercises: [Exercise] {
+        ExerciseCatalog.allExercises(context: modelContext)
     }
 
-    private var filteredGrouped: [(MuscleGroup, [Exercise])] {
-        if searchText.isEmpty { return allGrouped }
-        return allGrouped.compactMap { group, exercises in
-            let filtered = exercises.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-            return filtered.isEmpty ? nil : (group, filtered)
+    private var filteredExercises: [Exercise] {
+        guard !searchText.isEmpty else { return allExercises }
+        return allExercises.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText)
+                || $0.muscleGroup.rawValue.localizedCaseInsensitiveContains(searchText)
         }
+    }
+
+    private var recentExercises: [Exercise] {
+        var names = Set<String>()
+        return entries.compactMap { entry in
+            guard names.insert(entry.liftType).inserted else { return nil }
+            if let exercise = ExerciseCatalog.exercise(
+                named: entry.liftType,
+                context: modelContext
+            ) {
+                return exercise
+            }
+            let muscle = entry.muscleGroup
+                ?? ExerciseCatalog.muscleGroup(for: entry.liftType)
+                ?? .legs
+            return Exercise(
+                name: entry.liftType,
+                muscleGroup: muscle,
+                loadType: entry.loadType,
+                sideTracking: entry.side == .both ? .combined : .separate
+            )
+        }
+        .prefix(4)
+        .map { $0 }
     }
 
     var body: some View {
-        ZStack {
-            LinearGradient.screenBg.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Text("Choose Exercise")
-                        .font(.system(size: 26, weight: .bold))
-                        .foregroundColor(.white)
-                    Spacer()
-                    Button(action: { showAddSheet = true }) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(.accentOrange)
-                    }
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 24)
-
-                // Search bar
-                HStack(spacing: 10) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 15))
-                        .foregroundColor(.textSecondary)
-                    TextField("Search exercises", text: $searchText)
-                        .font(.system(size: 16))
-                        .foregroundColor(.white)
-                    if !searchText.isEmpty {
-                        Button(action: { searchText = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 16))
-                                .foregroundColor(.textSecondary)
-                        }
-                    }
-                }
-                .padding(12)
-                .background(Color.cardBg)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(Color.cardBorder, lineWidth: 1)
-                )
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
-
-                // Exercise list
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 28) {
-                        ForEach(filteredGrouped, id: \.0) { group, exercises in
-                            VStack(alignment: .leading, spacing: 0) {
-                                Text(group.rawValue.uppercased())
-                                    .font(.system(size: 11, weight: .bold))
-                                    .foregroundColor(.accentOrange)
-                                    .tracking(2)
-                                    .padding(.horizontal, 24)
-                                    .padding(.bottom, 10)
-
-                                ForEach(exercises) { exercise in
-                                    Button(action: {
-                                        selected = exercise
-                                        dismiss()
-                                    }) {
-                                        HStack {
-                                            Text(exercise.name)
-                                                .font(.system(size: 16))
-                                                .foregroundColor(.white)
-                                            if exercise.isCustom {
-                                                Text("Custom")
-                                                    .font(.system(size: 10, weight: .semibold))
-                                                    .foregroundColor(.accentOrange)
-                                                    .padding(.horizontal, 6)
-                                                    .padding(.vertical, 2)
-                                                    .background(Color.accentOrange.opacity(0.12))
-                                                    .clipShape(Capsule())
-                                            }
-                                            Spacer()
-                                            if selected?.name == exercise.name {
-                                                Image(systemName: "checkmark.circle.fill")
-                                                    .font(.system(size: 18))
-                                                    .foregroundColor(.accentOrange)
-                                            }
-                                        }
-                                        .padding(.horizontal, 24)
-                                        .padding(.vertical, 13)
-                                        .background(
-                                            selected?.name == exercise.name
-                                            ? Color.accentOrange.opacity(0.06)
-                                            : Color.clear
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
-                                    .contextMenu {
-                                        if exercise.isCustom {
-                                            Button(role: .destructive) {
-                                                deleteCustomExercise(named: exercise.name)
-                                            } label: {
-                                                Label("Delete Exercise", systemImage: "trash")
-                                            }
-                                        }
-                                    }
-                                }
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                LazyVStack(alignment: .leading, spacing: 10) {
+                    Button {
+                        showAddExercise = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 15, weight: .black))
+                                .foregroundStyle(Color.paper)
+                                .frame(width: 36, height: 36)
+                                .background(Color.ink, in: Circle())
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("CREATE CUSTOM EXERCISE")
+                                    .font(.system(size: 14, weight: .black))
+                                    .fontWidth(.condensed)
+                                    .tracking(0.6)
+                                    .foregroundStyle(Color.ink)
+                                Text("Choose resistance and side tracking")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(Color.inkMuted)
                             }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .black))
+                                .foregroundStyle(Color.signalOrange)
                         }
-
-                        if filteredGrouped.isEmpty {
-                            VStack(spacing: 8) {
-                                Text("No exercises found")
-                                    .font(.system(size: 15, weight: .medium))
-                                    .foregroundColor(.textSecondary)
-                                Button(action: { showAddSheet = true }) {
-                                    Text("Add custom exercise")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(.accentOrange)
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 40)
-                        }
+                        .padding(13)
+                        .background(
+                            Color.signalOrange.opacity(0.10),
+                            in: RoundedRectangle(cornerRadius: 16)
+                        )
                     }
-                    .padding(.top, 16)
-                    .padding(.bottom, 40)
+                    .buttonStyle(.plain)
+                    .padding(.bottom, 8)
+
+                    if searchText.isEmpty, !recentExercises.isEmpty {
+                        Text("RECENT")
+                            .sectionEyebrow()
+                            .padding(.top, 6)
+                        ForEach(recentExercises) { exerciseRow($0) }
+
+                        Text("ALL EXERCISES")
+                            .sectionEyebrow()
+                            .padding(.top, 18)
+                    }
+
+                    ForEach(filteredExercises) { exerciseRow($0) }
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 32)
+            }
+            .background(Color.paper)
+            .searchable(text: $searchText, prompt: "Exercise or muscle")
+            .navigationTitle("Choose Exercise")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundStyle(Color.ink)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showAddExercise = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .fontWeight(.bold)
+                    }
+                    .accessibilityLabel("Add custom exercise")
                 }
             }
         }
-        .sheet(isPresented: $showAddSheet) {
-            AddExerciseSheet()
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
+        .presentationDetents([.large])
+        .presentationCornerRadius(30)
+        .sheet(isPresented: $showAddExercise) {
+            AddExerciseSheet { exercise in
+                selected = exercise
+                dismiss()
+            }
         }
     }
 
-    private func deleteCustomExercise(named name: String) {
-        let descriptor = FetchDescriptor<CustomExercise>()
-        guard let customs = try? modelContext.fetch(descriptor) else { return }
-        if let match = customs.first(where: { $0.name == name }) {
-            if selected?.name == name { selected = nil }
-            modelContext.delete(match)
-            try? modelContext.save()
+    private func exerciseRow(_ exercise: Exercise) -> some View {
+        Button {
+            selected = exercise
+            dismiss()
+        } label: {
+            HStack(spacing: 13) {
+                ExerciseIcon(muscleGroup: exercise.muscleGroup, size: 44)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(exercise.name)
+                        .font(.system(size: 17, weight: .bold))
+                        .fontWidth(.condensed)
+                        .foregroundStyle(Color.ink)
+                    Text(exercise.muscleGroup.rawValue)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.inkMuted)
+                }
+                Spacer()
+                HStack(spacing: 5) {
+                    if exercise.loadType == .assistance {
+                        exerciseBadge("ASSISTED")
+                    }
+                    if exercise.sideTracking == .separate {
+                        exerciseBadge("L/R")
+                    }
+                    if ExerciseCatalog.isRanked(exercise.name) {
+                        exerciseBadge("RANKED")
+                    }
+                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color.inkFaint)
+            }
+            .padding(13)
+            .cardStyle(cornerRadius: 16)
         }
+        .buttonStyle(.plain)
+    }
+
+    private func exerciseBadge(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 9, weight: .black))
+            .tracking(0.8)
+            .foregroundStyle(Color.signalOrange)
     }
 }
 
-// MARK: - Add Exercise Sheet
-
 struct AddExerciseSheet: View {
+    let onSave: (Exercise) -> Void
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var name = ""
-    @State private var selectedMuscle: MuscleGroup = .chest
+    @State private var muscleGroup: MuscleGroup = .chest
+    @State private var loadType: ExerciseLoadType = .externalWeight
+    @State private var sideTracking: ExerciseSideTracking = .combined
+    @State private var showDuplicateError = false
 
     var body: some View {
-        ZStack {
-            LinearGradient.screenBg.ignoresSafeArea()
-
-            VStack(spacing: 24) {
-                Text("Add Custom Exercise")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.top, 24)
-
-                // Name field
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("NAME")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(.textSecondary)
-                        .tracking(2)
-                    TextField("Exercise name", text: $name)
-                        .font(.system(size: 17))
-                        .foregroundColor(.white)
-                        .padding(14)
-                        .background(Color.cardBg)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .strokeBorder(Color.cardBorder, lineWidth: 1)
-                        )
-                }
-                .padding(.horizontal, 24)
-
-                // Muscle group picker
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("MUSCLE GROUP")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(.textSecondary)
-                        .tracking(2)
-
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(MuscleGroup.allCases) { muscle in
-                                Button(action: { selectedMuscle = muscle }) {
-                                    Text(muscle.rawValue)
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundColor(selectedMuscle == muscle ? .black : .white)
-                                        .padding(.horizontal, 14)
-                                        .padding(.vertical, 8)
-                                        .background(selectedMuscle == muscle ? Color.accentOrange : Color.cardBg)
-                                        .clipShape(Capsule())
-                                        .overlay(
-                                            Capsule()
-                                                .strokeBorder(
-                                                    selectedMuscle == muscle ? Color.clear : Color.cardBorder,
-                                                    lineWidth: 1
-                                                )
-                                        )
-                                }
-                                .buttonStyle(.plain)
-                            }
+        NavigationStack {
+            Form {
+                Section("Exercise") {
+                    TextField("Name", text: $name)
+                    Picker("Muscle group", selection: $muscleGroup) {
+                        ForEach(MuscleGroup.allCases) { muscle in
+                            Text(muscle.rawValue).tag(muscle)
                         }
-                        .padding(.horizontal, 24)
                     }
                 }
 
-                Spacer()
-
-                // Save button
-                Button(action: saveExercise) {
-                    Text("Add Exercise")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(name.isEmpty ? .textSecondary : .black)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 52)
-                        .background(name.isEmpty ? Color.surfaceBg : Color.accentOrange)
-                        .clipShape(Capsule())
+                Section {
+                    Picker("Resistance", selection: $loadType) {
+                        ForEach(ExerciseLoadType.allCases) { type in
+                            Text(type.rawValue).tag(type)
+                        }
+                    }
+                    Picker("Side tracking", selection: $sideTracking) {
+                        ForEach(ExerciseSideTracking.allCases) { tracking in
+                            Text(tracking.rawValue).tag(tracking)
+                        }
+                    }
+                } header: {
+                    Text("Tracking")
+                } footer: {
+                    Text(loadType.guidance)
                 }
-                .disabled(name.isEmpty)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 32)
             }
+            .scrollContentBackground(.hidden)
+            .background(Color.paper)
+            .navigationTitle("Custom Exercise")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") { save() }
+                        .fontWeight(.bold)
+                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .alert("Exercise already exists", isPresented: $showDuplicateError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Choose a different exercise name.")
         }
     }
 
-    private func saveExercise() {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        let custom = CustomExercise(name: trimmed, muscleGroup: selectedMuscle)
-        modelContext.insert(custom)
+    private func save() {
+        let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let nameExists = ExerciseCatalog
+            .allExercises(context: modelContext)
+            .contains { $0.name.localizedCaseInsensitiveCompare(cleanName) == .orderedSame }
+        guard !nameExists else {
+            showDuplicateError = true
+            return
+        }
+
+        let model = CustomExercise(
+            name: cleanName,
+            muscleGroup: muscleGroup,
+            loadType: loadType,
+            sideTracking: sideTracking
+        )
+        modelContext.insert(model)
         try? modelContext.save()
+        onSave(
+            Exercise(
+                name: cleanName,
+                muscleGroup: muscleGroup,
+                isCustom: true,
+                loadType: loadType,
+                sideTracking: sideTracking
+            )
+        )
         dismiss()
     }
-}
-
-#Preview {
-    LogView(onDismiss: {})
-        .modelContainer(for: [UserProfile.self, LiftEntry.self, AppStats.self, CustomExercise.self], inMemory: true)
 }
