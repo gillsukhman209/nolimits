@@ -27,6 +27,20 @@ struct StrengthOverview {
     )
 }
 
+struct ProgressInsight: Identifiable, Equatable {
+    enum Kind: String {
+        case consistency
+        case improvement
+        case balance
+    }
+
+    let kind: Kind
+    let title: String
+    let detail: String
+
+    var id: String { "\(kind.rawValue)|\(detail)" }
+}
+
 enum LiftAnalytics {
     static func summaries(from entries: [LiftEntry]) -> [ExerciseSummary] {
         Dictionary(grouping: entries, by: \.liftType)
@@ -116,6 +130,78 @@ enum LiftAnalytics {
             return nil
         }
         return ((last.e1RM - first.e1RM) / first.e1RM) * 100
+    }
+
+    static func insights(
+        entries: [LiftEntry],
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) -> [ProgressInsight] {
+        guard !entries.isEmpty else { return [] }
+        var results: [ProgressInsight] = []
+
+        let sevenDaysAgo = calendar.date(byAdding: .day, value: -6, to: now) ?? now
+        let recentDays = Set(
+            entries
+                .filter { $0.date >= calendar.startOfDay(for: sevenDaysAgo) }
+                .map { calendar.startOfDay(for: $0.date) }
+        )
+        if !recentDays.isEmpty {
+            results.append(
+                ProgressInsight(
+                    kind: .consistency,
+                    title: "Weekly consistency",
+                    detail: "You trained on \(recentDays.count) of the last 7 days."
+                )
+            )
+        }
+
+        let performanceGroups = Dictionary(grouping: entries, by: \.performanceKey)
+        let strongestChange = performanceGroups.compactMap { key, values -> (String, Double)? in
+            let chronological = values.sorted { $0.date < $1.date }
+            guard chronological.count > 1,
+                  let first = chronological.first,
+                  let last = chronological.last,
+                  first.e1RM > 0 else { return nil }
+            let change = ((last.e1RM - first.e1RM) / first.e1RM) * 100
+            let side = first.side == .both ? "" : " \(first.side.rawValue.lowercased())"
+            return ("\(first.liftType)\(side)", change)
+        }
+        .max { abs($0.1) < abs($1.1) }
+
+        if let strongestChange, abs(strongestChange.1) >= 0.5 {
+            let direction = strongestChange.1 >= 0 ? "improved" : "changed"
+            results.append(
+                ProgressInsight(
+                    kind: .improvement,
+                    title: "Performance trend",
+                    detail: "\(strongestChange.0) has \(direction) \(abs(strongestChange.1).formatted(.number.precision(.fractionLength(1))))%."
+                )
+            )
+        }
+
+        let sideGroups = Dictionary(grouping: entries.filter { $0.side != .both }, by: \.liftType)
+        let largestImbalance = sideGroups.compactMap { name, values -> (String, ExerciseSide, Double)? in
+            let left = values.filter { $0.side == .left }.map(\.e1RM).max()
+            let right = values.filter { $0.side == .right }.map(\.e1RM).max()
+            guard let left, let right, max(left, right) > 0 else { return nil }
+            let difference = abs(left - right) / max(left, right) * 100
+            let weakerSide: ExerciseSide = left < right ? .left : .right
+            return (name, weakerSide, difference)
+        }
+        .max { $0.2 < $1.2 }
+
+        if let imbalance = largestImbalance, imbalance.2 >= 5 {
+            results.append(
+                ProgressInsight(
+                    kind: .balance,
+                    title: "Side balance",
+                    detail: "\(imbalance.0): \(imbalance.1.rawValue.lowercased()) is \(imbalance.2.formatted(.number.precision(.fractionLength(0))))% behind."
+                )
+            )
+        }
+
+        return Array(results.prefix(3))
     }
 }
 

@@ -52,7 +52,7 @@ enum ReminderService {
             guard !hasLog else { continue }
 
             let content = UNMutableNotificationContent()
-            content.body = "Log today’s lift to keep your streak."
+            content.body = "Log a set today to keep your streak."
             content.sound = .default
 
             let triggerComponents = calendar.dateComponents(

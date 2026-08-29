@@ -9,6 +9,8 @@ struct ProfileSettingsView: View {
     @AppStorage("liftoff.remindersEnabled") private var remindersEnabled = false
     @AppStorage("liftoff.appearance") private var appearanceRaw =
         AppearancePreference.system.rawValue
+    @AppStorage("liftoff.restTimer.autoStart") private var autoStartRestTimer = true
+    @AppStorage("liftoff.restTimer.duration") private var restTimerDuration = 150
     @AppStorage("liftoff.reminderTime") private var reminderTimestamp =
         Calendar.current.date(
             bySettingHour: 19,
@@ -68,6 +70,21 @@ struct ProfileSettingsView: View {
                     Text("Theme")
                 } footer: {
                     Text("System follows your iPhone appearance automatically.")
+                }
+
+                Section {
+                    Toggle("Start after saving a set", isOn: $autoStartRestTimer)
+                    if autoStartRestTimer {
+                        Picker("Rest duration", selection: $restTimerDuration) {
+                            Text("2:00").tag(120)
+                            Text("2:30").tag(150)
+                            Text("3:00").tag(180)
+                        }
+                    }
+                } header: {
+                    Text("Rest Timer")
+                } footer: {
+                    Text("The timer stays accurate while Liftoff is in the background. If notifications are allowed, Liftoff alerts you when rest is over.")
                 }
 
                 Section {

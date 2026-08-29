@@ -37,6 +37,7 @@ extension Color {
     static let signalOrange = Color(red: 1.00, green: 0.245, blue: 0.035)
     static let signalOrangePressed = Color(red: 0.87, green: 0.17, blue: 0.02)
     static let signalInk = Color(red: 0.07, green: 0.065, blue: 0.055)
+    static let signalPaper = Color(red: 0.970, green: 0.955, blue: 0.920)
     static let rankGold = Color(red: 0.88, green: 0.68, blue: 0.16)
     static let success = Color(red: 0.20, green: 0.53, blue: 0.30)
 

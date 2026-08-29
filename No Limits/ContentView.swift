@@ -26,7 +26,7 @@ struct LogPresentation: Identifiable {
 
 enum AppTab: String, CaseIterable, Identifiable {
     case today = "Today"
-    case history = "History"
+    case history = "Exercises"
     case progress = "Progress"
 
     var id: String { rawValue }
@@ -34,7 +34,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     var iconName: String {
         switch self {
         case .today: return "list.clipboard.fill"
-        case .history: return "clock.fill"
+        case .history: return "dumbbell.fill"
         case .progress: return "chart.bar.fill"
         }
     }
@@ -112,11 +112,17 @@ struct ContentView: View {
 
 struct LiftoffShellView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("liftoff.restTimer.autoStart") private var autoStartRestTimer = true
+    @AppStorage("liftoff.restTimer.duration") private var restTimerDuration = 150
     @State private var selectedTab: AppTab = .today
     @State private var path: [ExerciseDestination] = []
     @State private var showSettings = false
+    @State private var showRestTimer = false
     @State private var loggerPresentation: LogPresentation?
     @State private var rankUpResult: SaveResult?
+    @State private var savedFeedback: SaveResult?
+    @State private var restTimer = RestTimerController()
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -126,7 +132,16 @@ struct LiftoffShellView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                LiftoffTabBar(selection: $selectedTab)
+                VStack(spacing: 0) {
+                    if restTimer.isRunning {
+                        RestTimerBanner(timer: restTimer) {
+                            showRestTimer = true
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                    LiftoffTabBar(selection: $selectedTab)
+                }
+                .animation(.easeOut(duration: 0.22), value: restTimer.isRunning)
             }
             .navigationDestination(for: ExerciseDestination.self) { destination in
                 let exercise = ExerciseCatalog.exercise(
@@ -157,6 +172,9 @@ struct LiftoffShellView: View {
         .sheet(isPresented: $showSettings) {
             ProfileSettingsView()
         }
+        .sheet(isPresented: $showRestTimer) {
+            RestTimerSheet(timer: restTimer)
+        }
         .fullScreenCover(item: $rankUpResult) { result in
             RankUpView(
                 rank: result.newRank,
@@ -168,6 +186,19 @@ struct LiftoffShellView: View {
                 }
             )
         }
+        .overlay(alignment: .top) {
+            if let savedFeedback {
+                SetSavedToast(result: savedFeedback)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(10)
+            }
+        }
+        .onChange(of: scenePhase) {
+            guard scenePhase == .active else { return }
+            restTimer.refresh()
+        }
     }
 
     @ViewBuilder
@@ -178,8 +209,15 @@ struct LiftoffShellView: View {
                 onLogTap: {
                     loggerPresentation = LogPresentation(exercise: nil)
                 },
+                onTimerTap: { showRestTimer = true },
                 onSettingsTap: { showSettings = true },
-                onExerciseTap: openExercise
+                onExerciseTap: openExercise,
+                onQuickLog: { exercise, side in
+                    loggerPresentation = LogPresentation(
+                        exercise: exercise,
+                        side: side
+                    )
+                }
             )
         case .history:
             HistoryView(
@@ -206,10 +244,57 @@ struct LiftoffShellView: View {
             )
         }
         loggerPresentation = nil
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.84)) {
+            savedFeedback = result
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            guard savedFeedback?.id == result.id else { return }
+            withAnimation(.easeOut(duration: 0.2)) {
+                savedFeedback = nil
+            }
+        }
+        if autoStartRestTimer {
+            restTimer.start(seconds: restTimerDuration)
+        }
         guard result.didRankUp else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             rankUpResult = result
         }
+    }
+}
+
+struct SetSavedToast: View {
+    let result: SaveResult
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: result.isNewPR ? "trophy.fill" : "checkmark")
+                .font(.system(size: 14, weight: .black))
+                .foregroundStyle(Color.signalInk)
+                .frame(width: 34, height: 34)
+                .background(Color.signalOrange, in: Circle())
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(result.isNewPR ? "NEW PERSONAL BEST" : "SET SAVED")
+                    .font(.system(size: 12, weight: .black))
+                    .tracking(0.9)
+                    .foregroundStyle(Color.signalPaper)
+                Text(result.exerciseName)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.signalPaper.opacity(0.64))
+            }
+
+            Spacer()
+
+            Text("+\(result.xpEarned) XP")
+                .font(.system(size: 13, weight: .black))
+                .foregroundStyle(Color.signalOrange)
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 62)
+        .background(Color.signalInk, in: RoundedRectangle(cornerRadius: 18))
+        .shadow(color: Color.black.opacity(0.18), radius: 14, y: 7)
+        .accessibilityElement(children: .combine)
     }
 }
 

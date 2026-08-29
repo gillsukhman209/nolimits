@@ -14,24 +14,30 @@ struct HistoryView: View {
     @Query(sort: \LiftEntry.date, order: .reverse) private var entries: [LiftEntry]
     @State private var mode: Mode = .exercises
     @State private var searchText = ""
+    @State private var selectedMuscle: MuscleGroup?
+    @State private var editPresentation: EditSetPresentation?
 
     private var summaries: [ExerciseSummary] {
         LiftAnalytics.summaries(from: entries)
     }
 
     private var filteredSummaries: [ExerciseSummary] {
-        guard !searchText.isEmpty else { return summaries }
-        return summaries.filter {
-            $0.name.localizedCaseInsensitiveContains(searchText)
-                || $0.muscleGroup.rawValue.localizedCaseInsensitiveContains(searchText)
+        summaries.filter { summary in
+            let matchesSearch = searchText.isEmpty
+                || summary.name.localizedCaseInsensitiveContains(searchText)
+                || summary.muscleGroup.rawValue.localizedCaseInsensitiveContains(searchText)
+            let matchesMuscle = selectedMuscle == nil || summary.muscleGroup == selectedMuscle
+            return matchesSearch && matchesMuscle
         }
     }
 
     private var filteredEntries: [LiftEntry] {
-        guard !searchText.isEmpty else { return entries }
-        return entries.filter {
-            $0.liftType.localizedCaseInsensitiveContains(searchText)
-                || ($0.muscleGroup?.rawValue.localizedCaseInsensitiveContains(searchText) ?? false)
+        entries.filter { entry in
+            let matchesSearch = searchText.isEmpty
+                || entry.liftType.localizedCaseInsensitiveContains(searchText)
+                || (entry.muscleGroup?.rawValue.localizedCaseInsensitiveContains(searchText) ?? false)
+            let matchesMuscle = selectedMuscle == nil || entry.muscleGroup == selectedMuscle
+            return matchesSearch && matchesMuscle
         }
     }
 
@@ -44,6 +50,9 @@ struct HistoryView: View {
             searchBar
                 .padding(.horizontal, 24)
                 .padding(.top, 20)
+
+            muscleFilters
+                .padding(.top, 12)
 
             modePicker
                 .padding(.horizontal, 24)
@@ -65,6 +74,9 @@ struct HistoryView: View {
             }
         }
         .background(Color.paper)
+        .sheet(item: $editPresentation) { presentation in
+            EditSetSheet(entry: presentation.entry)
+        }
     }
 
     private var header: some View {
@@ -72,7 +84,7 @@ struct HistoryView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("YOUR")
                     .sectionEyebrow()
-                Text("HISTORY")
+                Text("EXERCISES")
                     .editorialTitle(size: 48, lineSpacing: -4)
                     .foregroundStyle(Color.ink)
             }
@@ -85,8 +97,51 @@ struct HistoryView: View {
                     .background(Color.signalOrange, in: Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Log a lift")
+            .accessibilityLabel("Log a set")
         }
+    }
+
+    private var muscleFilters: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                filterChip("ALL", isSelected: selectedMuscle == nil) {
+                    selectedMuscle = nil
+                }
+                ForEach(MuscleGroup.allCases) { muscle in
+                    filterChip(
+                        muscle.rawValue.uppercased(),
+                        isSelected: selectedMuscle == muscle
+                    ) {
+                        selectedMuscle = muscle
+                    }
+                }
+            }
+            .padding(.horizontal, 24)
+        }
+    }
+
+    private func filterChip(
+        _ title: String,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 10, weight: .black))
+                .tracking(0.7)
+                .foregroundStyle(isSelected ? Color.paper : Color.inkMuted)
+                .padding(.horizontal, 13)
+                .frame(height: 34)
+                .background(
+                    isSelected ? Color.ink : Color.paperRaised,
+                    in: Capsule()
+                )
+                .overlay {
+                    Capsule().stroke(isSelected ? Color.clear : Color.hairline)
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var searchBar: some View {
@@ -161,6 +216,8 @@ struct HistoryView: View {
         } else {
             ForEach(filteredEntries, id: \.id) { entry in
                 TimelineLiftRow(entry: entry) {
+                    editPresentation = EditSetPresentation(entry: entry)
+                } onDelete: {
                     AppStatsSynchronizer.delete(entry, context: modelContext)
                 } onOpen: {
                     guard let muscle = entry.muscleGroup else { return }
@@ -183,7 +240,7 @@ struct HistoryView: View {
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(Color.inkMuted)
                 .multilineTextAlignment(.center)
-            Button("LOG YOUR FIRST LIFT", action: onLogTap)
+            Button("LOG YOUR FIRST SET", action: onLogTap)
                 .font(.system(size: 15, weight: .black))
                 .fontWidth(.condensed)
                 .foregroundStyle(Color.white)
@@ -235,7 +292,7 @@ struct ExerciseHistoryCard: View {
                     .font(.system(size: 17, weight: .black))
                     .fontWidth(.condensed)
                     .foregroundStyle(Color.ink)
-                Text("\(summary.logCount) log\(summary.logCount == 1 ? "" : "s")")
+                Text("\(summary.logCount) set\(summary.logCount == 1 ? "" : "s")")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Color.inkMuted)
             }
@@ -247,7 +304,7 @@ struct ExerciseHistoryCard: View {
         .padding(15)
         .cardStyle(cornerRadius: 18)
         .accessibilityElement(children: .combine)
-        .accessibilityHint("Shows all \(summary.name) stats and logs")
+        .accessibilityHint("Shows all \(summary.name) stats and sets")
     }
 
     private var latestDescription: String {
@@ -256,7 +313,10 @@ struct ExerciseHistoryCard: View {
         let load = entry.loadType == .assistance
             ? "\(entry.weight.formattedWeight) lb assist"
             : "\(entry.weight.formattedWeight) lb"
-        return "Latest  \(side)\(load) × \(entry.reps)"
+        let trend = LiftAnalytics.changePercent(entries: summary.entries).map {
+            " · \($0 >= 0 ? "+" : "")\($0.formatted(.number.precision(.fractionLength(1))))%"
+        } ?? ""
+        return "Latest  \(side)\(load) × \(entry.reps)\(trend)"
     }
 
     private var bestDescription: String {
@@ -268,6 +328,7 @@ struct ExerciseHistoryCard: View {
 
 struct TimelineLiftRow: View {
     let entry: LiftEntry
+    let onEdit: () -> Void
     let onDelete: () -> Void
     let onOpen: () -> Void
 
@@ -305,8 +366,11 @@ struct TimelineLiftRow: View {
             }
 
             Menu {
+                Button(action: onEdit) {
+                    Label("Edit set", systemImage: "pencil")
+                }
                 Button(role: .destructive, action: onDelete) {
-                    Label("Delete log", systemImage: "trash")
+                    Label("Delete set", systemImage: "trash")
                 }
             } label: {
                 Image(systemName: "ellipsis")

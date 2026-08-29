@@ -113,9 +113,9 @@ struct LogView: View {
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("NEW LIFT")
+                Text("NEW SET")
                     .sectionEyebrow()
-                Text("Make it count.")
+                Text("Log it. Rest. Repeat.")
                     .font(.system(size: 34, weight: .black))
                     .fontWidth(.compressed)
                     .foregroundStyle(Color.ink)
@@ -376,7 +376,7 @@ struct LogView: View {
             HStack(spacing: 10) {
                 Image(systemName: "checkmark")
                     .font(.system(size: 16, weight: .black))
-                Text("SAVE LIFT")
+                Text("SAVE SET")
                     .font(.system(size: 20, weight: .black))
                     .fontWidth(.compressed)
                     .tracking(0.7)

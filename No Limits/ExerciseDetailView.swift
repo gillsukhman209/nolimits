@@ -19,6 +19,26 @@ struct ExerciseDetailView: View {
         }
     }
 
+    enum TrendRange: String, CaseIterable, Identifiable {
+        case fourWeeks = "4W"
+        case threeMonths = "3M"
+        case all = "ALL"
+
+        var id: String { rawValue }
+
+        func contains(_ date: Date, now: Date = .now) -> Bool {
+            let calendar = Calendar.current
+            switch self {
+            case .fourWeeks:
+                return date >= (calendar.date(byAdding: .day, value: -28, to: now) ?? now)
+            case .threeMonths:
+                return date >= (calendar.date(byAdding: .month, value: -3, to: now) ?? now)
+            case .all:
+                return true
+            }
+        }
+    }
+
     let exercise: Exercise
     let onLog: (ExerciseSide?) -> Void
 
@@ -27,6 +47,8 @@ struct ExerciseDetailView: View {
     @Query private var profiles: [UserProfile]
     @Query private var entries: [LiftEntry]
     @State private var sideScope: SideScope = .all
+    @State private var trendRange: TrendRange = .threeMonths
+    @State private var editPresentation: EditSetPresentation?
 
     init(
         exercise: Exercise,
@@ -67,7 +89,9 @@ struct ExerciseDetailView: View {
     }
 
     private var trendEntries: [LiftEntry] {
-        Array(visibleEntries.sorted { $0.date < $1.date }.suffix(12))
+        visibleEntries
+            .filter { trendRange.contains($0.date) }
+            .sorted { $0.date < $1.date }
     }
 
     private var visibleVolume: Double {
@@ -85,12 +109,15 @@ struct ExerciseDetailView: View {
                     sidePicker
                 }
                 metrics
+                if bestEntry != nil {
+                    nextTargetCard
+                }
 
                 if ExerciseCatalog.isRanked(exerciseName), !visibleEntries.isEmpty {
                     rankCard
                 }
 
-                if visibleEntries.count > 1,
+                if trendEntries.count > 1,
                    !tracksSides || sideScope != .all {
                     trendCard
                 }
@@ -125,6 +152,9 @@ struct ExerciseDetailView: View {
             .background(.ultraThinMaterial)
         }
         .toolbar(.hidden, for: .navigationBar)
+        .sheet(item: $editPresentation) { presentation in
+            EditSetSheet(entry: presentation.entry)
+        }
     }
 
     private var logButtonTitle: String {
@@ -287,6 +317,45 @@ struct ExerciseDetailView: View {
         .cardStyle(cornerRadius: 18)
     }
 
+    private var nextTargetCard: some View {
+        HStack(spacing: 13) {
+            Image(systemName: "scope")
+                .font(.system(size: 16, weight: .black))
+                .foregroundStyle(Color.signalOrange)
+                .frame(width: 40, height: 40)
+                .background(Color.signalOrange.opacity(0.1), in: Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("NEXT TARGET")
+                    .sectionEyebrow()
+                Text(nextTargetDescription)
+                    .font(.system(size: 18, weight: .black))
+                    .fontWidth(.condensed)
+                    .foregroundStyle(Color.ink)
+            }
+
+            Spacer()
+        }
+        .padding(15)
+        .cardStyle(cornerRadius: 16)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var nextTargetDescription: String {
+        guard let bestEntry else { return "Log a baseline set" }
+        let side = bestEntry.side == .both ? "" : "\(bestEntry.side.rawValue) · "
+        if exercise.loadType == .assistance {
+            if bestEntry.weight > 0 {
+                return "\(side)\(max(bestEntry.weight - 5, 0).formattedWeight) lb assist × \(bestEntry.reps)"
+            }
+            return "\(side)0 lb assist × \(bestEntry.reps + 1)"
+        }
+        if bestEntry.reps >= 12 {
+            return "\(side)\((bestEntry.weight + 5).formattedWeight) lb × 8"
+        }
+        return "\(side)\(bestEntry.weight.formattedWeight) lb × \(bestEntry.reps + 1)"
+    }
+
     private var trendCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
@@ -303,6 +372,28 @@ struct ExerciseDetailView: View {
                         .foregroundStyle(change >= 0 ? Color.success : Color.inkMuted)
                 }
             }
+
+            HStack(spacing: 4) {
+                ForEach(TrendRange.allCases) { range in
+                    Button {
+                        withAnimation(.easeOut(duration: 0.18)) {
+                            trendRange = range
+                        }
+                    } label: {
+                        Text(range.rawValue)
+                            .font(.system(size: 10, weight: .black))
+                            .foregroundStyle(trendRange == range ? Color.paper : Color.inkMuted)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 30)
+                            .background(trendRange == range ? Color.ink : Color.clear)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(trendRange == range ? .isSelected : [])
+                }
+            }
+            .padding(3)
+            .background(Color.hairline.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
 
             Chart(trendEntries, id: \.id) { entry in
                 AreaMark(
@@ -354,7 +445,7 @@ struct ExerciseDetailView: View {
     private var history: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("ALL LOGS")
+                Text("ALL SETS")
                     .sectionEyebrow()
                 Spacer()
                 if !visibleEntries.isEmpty {
@@ -376,6 +467,9 @@ struct ExerciseDetailView: View {
                     ExerciseLogRow(
                         entry: entry,
                         isPersonalBest: isPersonalBest(entry),
+                        onEdit: {
+                            editPresentation = EditSetPresentation(entry: entry)
+                        },
                         onDelete: { delete(entry) }
                     )
                 }
@@ -385,9 +479,9 @@ struct ExerciseDetailView: View {
 
     private var emptyHistoryMessage: String {
         if let side = sideScope.side {
-            return "No \(side.rawValue.lowercased())-side logs yet."
+            return "No \(side.rawValue.lowercased())-side sets yet."
         }
-        return "No \(exerciseName) logs yet."
+        return "No \(exerciseName) sets yet."
     }
 
     private func isPersonalBest(_ entry: LiftEntry) -> Bool {
@@ -434,6 +528,7 @@ struct MetricTile: View {
 struct ExerciseLogRow: View {
     let entry: LiftEntry
     let isPersonalBest: Bool
+    let onEdit: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
@@ -474,8 +569,11 @@ struct ExerciseLogRow: View {
                 .foregroundStyle(Color.ink)
 
             Menu {
+                Button(action: onEdit) {
+                    Label("Edit set", systemImage: "pencil")
+                }
                 Button(role: .destructive, action: onDelete) {
-                    Label("Delete log", systemImage: "trash")
+                    Label("Delete set", systemImage: "trash")
                 }
             } label: {
                 Image(systemName: "ellipsis")

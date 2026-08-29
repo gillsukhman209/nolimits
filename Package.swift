@@ -20,6 +20,7 @@ let package = Package(
                 "BodyMapView.swift",
                 "ContentView.swift",
                 "DesignSystem.swift",
+                "EditSetSheet.swift",
                 "ExerciseDetailView.swift",
                 "FontRegistration.swift",
                 "HistoryView.swift",
@@ -33,6 +34,8 @@ let package = Package(
                 "ProgressView.swift",
                 "RankUpView.swift",
                 "ReminderService.swift",
+                "RestTimerController.swift",
+                "RestTimerView.swift",
                 "body.png",
             ],
             sources: [
@@ -45,6 +48,7 @@ let package = Package(
                 "MuscleGroup.swift",
                 "Rank.swift",
                 "RankingService.swift",
+                "RestTimerMath.swift",
                 "StreakService.swift",
                 "UserProfile.swift",
             ]
