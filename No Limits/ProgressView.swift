@@ -150,7 +150,7 @@ struct ProgressView: View {
                         .foregroundStyle(Color.ink)
                     Text(entries.isEmpty
                          ? "Available after your first set"
-                         : "See what’s rising, stalled, or falling")
+                         : "Audit your week, coverage, and workload")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Color.inkMuted)
                 }
@@ -270,12 +270,9 @@ struct ProgressView: View {
         } else {
             LazyVStack(spacing: 12) {
                 ForEach(summaries) { summary in
-                    Button {
+                    ProgressExerciseCard(summary: summary) {
                         onExerciseTap(summary.name, summary.muscleGroup)
-                    } label: {
-                        ProgressExerciseCard(summary: summary)
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
@@ -324,6 +321,9 @@ struct ProgressView: View {
 
 struct ProgressExerciseCard: View {
     let summary: ExerciseSummary
+    let onOpen: () -> Void
+
+    @State private var selectedEntryID: UUID?
 
     private var trend: Double? {
         LiftAnalytics.recentTrendPercent(entries: summary.entries)
@@ -331,6 +331,11 @@ struct ProgressExerciseCard: View {
 
     private var chartEntries: [LiftEntry] {
         Array(summary.entries.sorted { $0.date < $1.date }.suffix(12))
+    }
+
+    private var selectedEntry: LiftEntry? {
+        guard let selectedEntryID else { return nil }
+        return chartEntries.first { $0.id == selectedEntryID }
     }
 
     var body: some View {
@@ -363,15 +368,15 @@ struct ProgressExerciseCard: View {
 
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("BEST SET")
+                    Text(selectedEntry == nil ? "BEST SET" : "SELECTED SET")
                         .font(.system(size: 9, weight: .black))
                         .tracking(1)
                         .foregroundStyle(Color.signalOrange)
-                    Text(setDescription(summary.bestEntry))
+                    Text(setDescription(selectedEntry ?? summary.bestEntry))
                         .font(.system(size: 18, weight: .black))
                         .fontWidth(.condensed)
                         .foregroundStyle(Color.ink)
-                    Text("Est. max \(summary.bestE1RM.formattedWeight) lb")
+                    Text(selectionDetail)
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(Color.inkMuted)
                 }
@@ -388,19 +393,68 @@ struct ProgressExerciseCard: View {
                         x: .value("Date", entry.date),
                         y: .value("Estimated max", entry.e1RM)
                     )
-                    .foregroundStyle(Color.ink)
-                    .symbolSize(13)
+                    .foregroundStyle(selectedEntryID == entry.id ? Color.signalOrange : Color.ink)
+                    .symbolSize(selectedEntryID == entry.id ? 55 : 13)
+
+                    if selectedEntryID == entry.id {
+                        RuleMark(x: .value("Selected date", entry.date))
+                            .foregroundStyle(Color.ink.opacity(0.45))
+                            .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                    }
                 }
                 .chartXAxis(.hidden)
                 .chartYAxis(.hidden)
+                .chartOverlay { proxy in
+                    GeometryReader { geometry in
+                        Rectangle()
+                            .fill(Color.clear)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { value in
+                                        selectEntry(
+                                            at: value.location,
+                                            proxy: proxy,
+                                            geometry: geometry
+                                        )
+                                    }
+                            )
+                    }
+                }
                 .frame(width: 104, height: 54)
-                .accessibilityHidden(true)
+                .accessibilityLabel("Recent estimated max chart for \(summary.name)")
+                .accessibilityHint("Press and drag to inspect each recent set")
             }
         }
         .padding(16)
         .cardStyle(cornerRadius: 18)
-        .accessibilityElement(children: .combine)
-        .accessibilityHint("Opens detailed charts, records, and all sets")
+        .contentShape(RoundedRectangle(cornerRadius: 18))
+        .onTapGesture(perform: onOpen)
+        .sensoryFeedback(.selection, trigger: selectedEntryID)
+        .accessibilityAction(named: "Open exercise details", onOpen)
+    }
+
+    private var selectionDetail: String {
+        guard let selectedEntry else {
+            return "Est. max \(summary.bestE1RM.formattedWeight) lb"
+        }
+        return "\(selectedEntry.date.formatted(date: .abbreviated, time: .omitted)) · Est. \(selectedEntry.e1RM.formattedWeight) lb"
+    }
+
+    private func selectEntry(
+        at location: CGPoint,
+        proxy: ChartProxy,
+        geometry: GeometryProxy
+    ) {
+        guard let plotFrame = proxy.plotFrame else { return }
+        let frame = geometry[plotFrame]
+        guard frame.contains(location) else { return }
+        let xPosition = location.x - frame.origin.x
+        guard let date: Date = proxy.value(atX: xPosition),
+              let entry = LiftAnalytics.nearestEntry(to: date, entries: chartEntries) else {
+            return
+        }
+        selectedEntryID = entry.id
     }
 
     private func setDescription(_ entry: LiftEntry) -> String {

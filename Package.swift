@@ -28,6 +28,7 @@ let package = Package(
                 "No_LimitsApp.swift",
                 "OnboardingView.swift",
                 "PaywallView.swift",
+                "PersonalRecordCelebrationView.swift",
                 "ProfileSettingsView.swift",
                 "ProgressView.swift",
                 "ReminderService.swift",

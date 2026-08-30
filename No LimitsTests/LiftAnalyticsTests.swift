@@ -112,6 +112,111 @@ final class LiftAnalyticsTests: XCTestCase {
         XCTAssertTrue(dataset.fallbackReview.contains("**Squat:** up"))
     }
 
+    func testWeeklyAuditIncludesOnlyCurrentSevenDayWindow() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let today = LiftEntry(
+            date: now,
+            liftType: "Bench Press",
+            muscleGroup: .chest,
+            weight: 100,
+            reps: 5
+        )
+        let sixDaysAgo = LiftEntry(
+            date: calendar.date(byAdding: .day, value: -6, to: now)!,
+            liftType: "Squat",
+            muscleGroup: .quads,
+            weight: 150,
+            reps: 5
+        )
+        let sevenDaysAgo = LiftEntry(
+            date: calendar.date(byAdding: .day, value: -7, to: now)!,
+            liftType: "Barbell Row",
+            muscleGroup: .lats,
+            weight: 100,
+            reps: 8
+        )
+
+        let audit = LiftAnalytics.weeklyTrainingAudit(
+            entries: [today, sixDaysAgo, sevenDaysAgo],
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(audit.setCount, 2)
+        XCTAssertEqual(audit.trainingDays, 2)
+        XCTAssertEqual(audit.regionSetCounts[.push], 1)
+        XCTAssertEqual(audit.regionSetCounts[.lowerBody], 1)
+        XCTAssertEqual(audit.regionSetCounts[.pull], 0)
+    }
+
+    func testWeeklyAuditFlagsConcentratedMuscleAndMissingCoverage() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let entries = (0..<8).map { index in
+            LiftEntry(
+                date: now.addingTimeInterval(Double(-index * 60)),
+                liftType: "Dumbbell Curl",
+                muscleGroup: .biceps,
+                weight: 25,
+                reps: 10,
+                side: index.isMultiple(of: 2) ? .left : .right
+            )
+        }
+
+        let audit = LiftAnalytics.weeklyTrainingAudit(entries: entries, now: now)
+
+        XCTAssertEqual(audit.muscleStats.first { $0.muscleGroup == .biceps }?.share, 1)
+        XCTAssertTrue(audit.highConcentrationMuscleGroups.contains(.biceps))
+        XCTAssertTrue(audit.missingMuscleGroups.contains(.quads))
+        XCTAssertEqual(audit.regionSetCounts[.pull], 8)
+    }
+
+    func testTrainingReviewContainsWeeklyCoverageAndWorkloadWarnings() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let entries = (0..<8).map { index in
+            LiftEntry(
+                date: now.addingTimeInterval(Double(-index * 60)),
+                liftType: "Bench Press",
+                muscleGroup: .chest,
+                weight: 100,
+                reps: 8
+            )
+        }
+
+        let dataset = TrainingReviewDataBuilder.make(entries: entries, bodyweight: 180, now: now)
+
+        XCTAssertTrue(dataset.promptData.contains("COMPLETE WEEKLY AUDIT"))
+        XCTAssertTrue(dataset.promptData.contains("Chest: 8 sets"))
+        XCTAssertTrue(dataset.fallbackReview.contains("## Muscle coverage"))
+        XCTAssertTrue(dataset.fallbackReview.contains("Potential overemphasis: Chest"))
+        XCTAssertTrue(dataset.fallbackReview.contains("No direct lower-body sets"))
+    }
+
+    func testNearestChartEntrySnapsToClosestDate() {
+        let first = LiftEntry(
+            date: Date(timeIntervalSince1970: 100),
+            liftType: "Bench Press",
+            muscleGroup: .chest,
+            weight: 100,
+            reps: 5
+        )
+        let second = LiftEntry(
+            date: Date(timeIntervalSince1970: 200),
+            liftType: "Bench Press",
+            muscleGroup: .chest,
+            weight: 110,
+            reps: 5
+        )
+
+        let nearest = LiftAnalytics.nearestEntry(
+            to: Date(timeIntervalSince1970: 180),
+            entries: [first, second]
+        )
+
+        XCTAssertEqual(nearest?.id, second.id)
+    }
+
     func testInsightsReportWeeklyConsistencyAndImprovement() {
         let calendar = Calendar(identifier: .gregorian)
         let now = Date(timeIntervalSince1970: 2_000_000)

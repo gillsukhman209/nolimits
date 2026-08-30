@@ -58,6 +58,7 @@ struct ExerciseDetailView: View {
     @State private var trendRange: TrendRange = .threeMonths
     @State private var chartMetric: ChartMetric = .weight
     @State private var editPresentation: EditSetPresentation?
+    @State private var selectedChartEntryID: UUID?
 
     init(exercise: Exercise, onLog: @escaping (ExerciseSide?) -> Void) {
         self.exercise = exercise
@@ -98,6 +99,11 @@ struct ExerciseDetailView: View {
 
     private var personalBestIDs: Set<UUID> {
         LiftAnalytics.personalBestEntryIDs(entries: entries)
+    }
+
+    private var selectedChartEntry: LiftEntry? {
+        guard let selectedChartEntryID else { return nil }
+        return chartEntries.first { $0.id == selectedChartEntryID }
     }
 
     private var displayedTrend: Double? {
@@ -351,6 +357,8 @@ struct ExerciseDetailView: View {
             }
             .selectionBarStyle()
 
+            chartSelectionDetail
+
             Chart(chartEntries, id: \.id) { entry in
                 LineMark(
                     x: .value("Date", entry.date),
@@ -365,7 +373,17 @@ struct ExerciseDetailView: View {
                     y: .value(chartMetric.rawValue, chartValue(entry))
                 )
                 .foregroundStyle(by: .value("Side", chartSeries(entry)))
-                .symbolSize(personalBestIDs.contains(entry.id) ? 42 : 24)
+                .symbolSize(
+                    selectedChartEntryID == entry.id
+                        ? 92
+                        : (personalBestIDs.contains(entry.id) ? 42 : 24)
+                )
+
+                if selectedChartEntryID == entry.id {
+                    RuleMark(x: .value("Selected date", entry.date))
+                        .foregroundStyle(Color.ink.opacity(0.52))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                }
             }
             .chartForegroundStyleScale([
                 "All sets": Color.signalOrange,
@@ -390,8 +408,26 @@ struct ExerciseDetailView: View {
                 }
             }
             .chartLegend(tracksSides && sideScope == .all ? .visible : .hidden)
+            .chartOverlay { proxy in
+                GeometryReader { geometry in
+                    Rectangle()
+                        .fill(Color.clear)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    selectChartEntry(
+                                        at: value.location,
+                                        proxy: proxy,
+                                        geometry: geometry
+                                    )
+                                }
+                        )
+                }
+            }
             .frame(height: 220)
             .accessibilityLabel("\(chartMetric.rawValue) chart for \(exercise.name)")
+            .accessibilityHint("Press and drag across the chart to inspect each set")
 
             HStack(spacing: 4) {
                 ForEach(TrendRange.allCases) { range in
@@ -404,6 +440,69 @@ struct ExerciseDetailView: View {
         }
         .padding(18)
         .cardStyle(cornerRadius: 18)
+        .onChange(of: trendRange) { selectedChartEntryID = nil }
+        .onChange(of: chartMetric) { selectedChartEntryID = nil }
+        .onChange(of: sideScope) { selectedChartEntryID = nil }
+        .sensoryFeedback(.selection, trigger: selectedChartEntryID)
+    }
+
+    @ViewBuilder
+    private var chartSelectionDetail: some View {
+        if let entry = selectedChartEntry {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entry.date.formatted(date: .abbreviated, time: .shortened).uppercased())
+                        .font(.system(size: 9, weight: .black))
+                        .tracking(0.8)
+                        .foregroundStyle(Color.inkMuted)
+                    Text(setDescription(entry))
+                        .font(.system(size: 18, weight: .black))
+                        .fontWidth(.condensed)
+                        .foregroundStyle(Color.ink)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    if personalBestIDs.contains(entry.id) {
+                        Text("PR")
+                            .font(.system(size: 9, weight: .black))
+                            .foregroundStyle(Color.white)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Color.signalOrange, in: Capsule())
+                    }
+                    Text("Est. \(entry.e1RM.formattedWeight) lb")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.inkMuted)
+                }
+            }
+            .padding(.horizontal, 13)
+            .frame(height: 58)
+            .background(Color.hairline.opacity(0.28), in: RoundedRectangle(cornerRadius: 12))
+            .accessibilityElement(children: .combine)
+        } else {
+            Label("Hold and drag across the chart to inspect each set", systemImage: "hand.draw")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(Color.inkMuted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(height: 34)
+        }
+    }
+
+    private func selectChartEntry(
+        at location: CGPoint,
+        proxy: ChartProxy,
+        geometry: GeometryProxy
+    ) {
+        guard let plotFrame = proxy.plotFrame else { return }
+        let frame = geometry[plotFrame]
+        guard frame.contains(location) else { return }
+        let xPosition = location.x - frame.origin.x
+        guard let selectedDate: Date = proxy.value(atX: xPosition),
+              let nearest = LiftAnalytics.nearestEntry(
+                  to: selectedDate,
+                  entries: chartEntries
+              ) else { return }
+        selectedChartEntryID = nearest.id
     }
 
     private var chartSubtitle: String {

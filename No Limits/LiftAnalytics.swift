@@ -52,6 +52,45 @@ struct ProgressInsight: Identifiable, Equatable {
     var id: String { "\(kind.rawValue)|\(detail)" }
 }
 
+enum TrainingRegion: String, CaseIterable, Identifiable {
+    case push = "Push"
+    case pull = "Pull"
+    case lowerBody = "Lower body"
+    case core = "Core"
+
+    var id: String { rawValue }
+}
+
+struct WeeklyMuscleStat: Identifiable, Equatable {
+    let muscleGroup: MuscleGroup
+    let setCount: Int
+    let trainingDays: Int
+    let share: Double
+
+    var id: MuscleGroup { muscleGroup }
+}
+
+struct WeeklyTrainingDay: Identifiable {
+    let date: Date
+    let entries: [LiftEntry]
+
+    var id: Date { date }
+}
+
+struct WeeklyTrainingAudit {
+    let startDate: Date
+    let endDate: Date
+    let entries: [LiftEntry]
+    let days: [WeeklyTrainingDay]
+    let muscleStats: [WeeklyMuscleStat]
+    let regionSetCounts: [TrainingRegion: Int]
+    let missingMuscleGroups: [MuscleGroup]
+    let highConcentrationMuscleGroups: [MuscleGroup]
+
+    var setCount: Int { entries.count }
+    var trainingDays: Int { days.count }
+}
+
 enum LiftAnalytics {
     private struct WeightSideKey: Hashable {
         let weight: Double
@@ -194,6 +233,82 @@ enum LiftAnalytics {
             }
         }
         return recordIDs
+    }
+
+    static func nearestEntry(to date: Date, entries: [LiftEntry]) -> LiftEntry? {
+        entries.min {
+            abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date))
+        }
+    }
+
+    static func weeklyTrainingAudit(
+        entries: [LiftEntry],
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) -> WeeklyTrainingAudit {
+        let endDate = now
+        let startDate = calendar.startOfDay(
+            for: calendar.date(byAdding: .day, value: -6, to: now) ?? now
+        )
+        let weeklyEntries = entries
+            .filter { $0.date >= startDate && $0.date <= endDate }
+            .sorted { $0.date < $1.date }
+        let groupedDays = Dictionary(grouping: weeklyEntries) {
+            calendar.startOfDay(for: $0.date)
+        }
+        let days = groupedDays
+            .map { WeeklyTrainingDay(date: $0.key, entries: $0.value.sorted { $0.date < $1.date }) }
+            .sorted { $0.date < $1.date }
+
+        let groupedMuscles = Dictionary(grouping: weeklyEntries) { entry in
+            entry.muscleGroup
+                ?? ExerciseCatalog.muscleGroup(for: entry.liftType)
+                ?? .legs
+        }
+        let total = Double(weeklyEntries.count)
+        let muscleStats = MuscleGroup.allCases.map { muscle in
+            let muscleEntries = groupedMuscles[muscle] ?? []
+            return WeeklyMuscleStat(
+                muscleGroup: muscle,
+                setCount: muscleEntries.count,
+                trainingDays: Set(muscleEntries.map { calendar.startOfDay(for: $0.date) }).count,
+                share: total > 0 ? Double(muscleEntries.count) / total : 0
+            )
+        }
+
+        var regionSetCounts = Dictionary(uniqueKeysWithValues: TrainingRegion.allCases.map { ($0, 0) })
+        for stat in muscleStats {
+            regionSetCounts[trainingRegion(for: stat.muscleGroup), default: 0] += stat.setCount
+        }
+
+        let highConcentration = muscleStats.filter { stat in
+            stat.setCount > 12
+                || (weeklyEntries.count >= 8 && stat.setCount >= 6 && stat.share >= 0.35)
+        }
+
+        return WeeklyTrainingAudit(
+            startDate: startDate,
+            endDate: endDate,
+            entries: weeklyEntries,
+            days: days,
+            muscleStats: muscleStats,
+            regionSetCounts: regionSetCounts,
+            missingMuscleGroups: muscleStats.filter { $0.setCount == 0 }.map(\.muscleGroup),
+            highConcentrationMuscleGroups: highConcentration.map(\.muscleGroup)
+        )
+    }
+
+    static func trainingRegion(for muscle: MuscleGroup) -> TrainingRegion {
+        switch muscle {
+        case .upperChest, .chest, .shoulders, .triceps:
+            return .push
+        case .lats, .biceps:
+            return .pull
+        case .quads, .hamstrings, .legs:
+            return .lowerBody
+        case .abdominals:
+            return .core
+        }
     }
 
     static func insights(

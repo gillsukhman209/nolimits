@@ -30,6 +30,8 @@ final class SmartLoggingTests: XCTestCase {
         )
         let secondResult = try XCTUnwrap(second.saveLift(context: context))
         XCTAssertTrue(secondResult.isNewPR)
+        XCTAssertEqual(secondResult.previousBestEstimatedMax, firstResult.estimatedMax, accuracy: 0.001)
+        XCTAssertGreaterThan(secondResult.estimatedMax, secondResult.previousBestEstimatedMax)
 
         let entries = try context.fetch(FetchDescriptor<LiftEntry>())
         XCTAssertEqual(entries.count, 2)

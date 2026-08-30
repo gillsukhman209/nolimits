@@ -122,6 +122,7 @@ struct LiftoffShellView: View {
     @State private var showRestTimer = false
     @State private var loggerPresentation: LogPresentation?
     @State private var savedFeedback: SaveResult?
+    @State private var personalRecordResult: SaveResult?
     @State private var restTimer = RestTimerController()
 
     var body: some View {
@@ -174,6 +175,22 @@ struct LiftoffShellView: View {
         }
         .sheet(isPresented: $showRestTimer) {
             RestTimerSheet(timer: restTimer)
+        }
+        .fullScreenCover(item: $personalRecordResult) { result in
+            PersonalRecordCelebrationView(
+                result: result,
+                onContinue: { personalRecordResult = nil },
+                onViewProgress: {
+                    personalRecordResult = nil
+                    path = [
+                        ExerciseDestination(
+                            name: result.exerciseName,
+                            muscleGroup: result.muscleGroup
+                        )
+                    ]
+                    selectedTab = .progress
+                }
+            )
         }
         .overlay(alignment: .top) {
             if let savedFeedback {
@@ -244,6 +261,11 @@ struct LiftoffShellView: View {
         }
         if autoStartRestTimer {
             restTimer.start(seconds: restTimerDuration)
+        }
+        if result.isNewPR {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                personalRecordResult = result
+            }
         }
     }
 }

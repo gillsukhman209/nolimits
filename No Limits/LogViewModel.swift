@@ -7,8 +7,11 @@ struct SaveResult: Identifiable {
     let exerciseName: String
     let muscleGroup: MuscleGroup
     let side: ExerciseSide
+    let loadType: ExerciseLoadType
     let weight: Double
     let reps: Int
+    let estimatedMax: Double
+    let previousBestEstimatedMax: Double
     let isNewPR: Bool
     let isFirstSet: Bool
 }
@@ -114,8 +117,11 @@ final class LogViewModel {
             exerciseName: exercise.name,
             muscleGroup: exercise.muscleGroup,
             side: entrySide,
+            loadType: exercise.loadType,
             weight: numericWeight,
             reps: numericReps,
+            estimatedMax: newE1RM,
+            previousBestEstimatedMax: previousBest,
             isNewPR: isNewPR,
             isFirstSet: existingEntries.isEmpty
         )
