@@ -23,9 +23,9 @@ enum ExerciseLoadType: String, CaseIterable, Codable, Identifiable {
     var guidance: String {
         switch self {
         case .externalWeight:
-            return "More weight or reps improves the score."
+            return "More weight or reps improves your performance."
         case .assistance:
-            return "Lower assistance is harder and improves the score."
+            return "Lower assistance is harder and counts as improvement."
         }
     }
 }
@@ -72,10 +72,7 @@ struct PerformanceService {
             workingLoad = max(bodyweight - weight, 0)
         }
 
-        return RankingService.calculateE1RM(
-            weight: workingLoad,
-            reps: reps
-        )
+        return workingLoad * (1 + Double(reps) / 30)
     }
 
     static func isPersonalBest(

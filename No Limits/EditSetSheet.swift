@@ -60,7 +60,7 @@ struct EditSetSheet: View {
                 } header: {
                     Text("Tracking")
                 } footer: {
-                    Text("Editing recalculates the estimated max, personal bests, XP, and rank progress.")
+                    Text("Editing recalculates the estimated max, personal bests, charts, and exercise trends.")
                 }
             }
             .scrollContentBackground(.hidden)

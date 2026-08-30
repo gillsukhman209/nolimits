@@ -155,9 +155,6 @@ struct LogView: View {
                         .foregroundStyle(Color.ink)
 
                     Text(vm.selectedExercise.map {
-                        if ExerciseCatalog.isRanked($0.name) {
-                            return "\($0.muscleGroup.rawValue) · Ranked lift"
-                        }
                         if $0.loadType == .assistance {
                             return "\($0.muscleGroup.rawValue) · Lower is harder"
                         }
@@ -574,9 +571,6 @@ struct ExercisePickerSheet: View {
                     }
                     if exercise.sideTracking == .separate {
                         exerciseBadge("L/R")
-                    }
-                    if ExerciseCatalog.isRanked(exercise.name) {
-                        exerciseBadge("RANKED")
                     }
                 }
                 Image(systemName: "chevron.right")

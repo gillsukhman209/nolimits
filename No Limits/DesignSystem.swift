@@ -38,7 +38,6 @@ extension Color {
     static let signalOrangePressed = Color(red: 0.87, green: 0.17, blue: 0.02)
     static let signalInk = Color(red: 0.07, green: 0.065, blue: 0.055)
     static let signalPaper = Color(red: 0.970, green: 0.955, blue: 0.920)
-    static let rankGold = Color(red: 0.88, green: 0.68, blue: 0.16)
     static let success = Color(red: 0.20, green: 0.53, blue: 0.30)
 
     // Backward-compatible names for untouched supporting screens.
@@ -88,40 +87,6 @@ extension LinearGradient {
         startPoint: .top,
         endPoint: .bottom
     )
-}
-
-extension Rank {
-    var color: Color {
-        switch self {
-        case .iron: return Color(red: 0.36, green: 0.37, blue: 0.36)
-        case .bronze: return Color(red: 0.62, green: 0.36, blue: 0.18)
-        case .silver: return Color(red: 0.52, green: 0.55, blue: 0.57)
-        case .gold: return .rankGold
-        case .platinum: return Color(red: 0.29, green: 0.55, blue: 0.54)
-        case .diamond: return Color(red: 0.21, green: 0.45, blue: 0.67)
-        case .titan: return Color(red: 0.54, green: 0.23, blue: 0.18)
-        }
-    }
-
-    var gradient: LinearGradient {
-        LinearGradient(
-            colors: [color.opacity(0.72), color],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-
-    var symbolName: String {
-        switch self {
-        case .iron: return "hexagon.fill"
-        case .bronze: return "shield.lefthalf.filled"
-        case .silver: return "shield.fill"
-        case .gold: return "medal.fill"
-        case .platinum: return "seal.fill"
-        case .diamond: return "diamond.fill"
-        case .titan: return "crown.fill"
-        }
-    }
 }
 
 struct CardStyle: ViewModifier {

@@ -10,6 +10,7 @@ import SwiftData
 
 @Model
 final class AppStats {
+    // Retained for SwiftData migration compatibility. No longer used by the app.
     var xp: Int
     var streak: Int
     var lastLoggedDate: Date?

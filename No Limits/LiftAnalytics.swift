@@ -11,20 +11,31 @@ struct ExerciseSummary: Identifiable {
     var id: String { name }
     var logCount: Int { entries.count }
     var bestE1RM: Double { bestEntry.e1RM }
+    var trainingDays: Int {
+        Set(entries.map { Calendar.current.startOfDay(for: $0.date) }).count
+    }
 }
 
-struct StrengthOverview {
-    let score: Double
-    let rank: Rank
-    let progress: Double
-    let sourceExercise: String?
+struct WeightRepRecord: Identifiable, Equatable {
+    let weight: Double
+    let reps: Int
+    let setCount: Int
+    let side: ExerciseSide
+    let achievedAt: Date
+    let loadType: ExerciseLoadType
 
-    static let empty = StrengthOverview(
-        score: 0,
-        rank: .iron,
-        progress: 0,
-        sourceExercise: nil
-    )
+    var id: String { "\(weight)|\(side.rawValue)" }
+}
+
+struct ExerciseProgressSnapshot {
+    let bestEntry: LiftEntry?
+    let heaviestEntry: LiftEntry?
+    let latestEntry: LiftEntry?
+    let setCount: Int
+    let trainingDays: Int
+    let totalVolume: Double
+    let recentAverageWeight: Double
+    let trendPercent: Double?
 }
 
 struct ProgressInsight: Identifiable, Equatable {
@@ -42,6 +53,11 @@ struct ProgressInsight: Identifiable, Equatable {
 }
 
 enum LiftAnalytics {
+    private struct WeightSideKey: Hashable {
+        let weight: Double
+        let side: ExerciseSide
+    }
+
     static func summaries(from entries: [LiftEntry]) -> [ExerciseSummary] {
         Dictionary(grouping: entries, by: \.liftType)
             .compactMap { name, exerciseEntries in
@@ -63,48 +79,6 @@ enum LiftAnalytics {
             .sorted { lhs, rhs in
                 lhs.latestEntry.date > rhs.latestEntry.date
             }
-    }
-
-    static func overview(entries: [LiftEntry], bodyweight: Double) -> StrengthOverview {
-        let rankedEntries = entries.filter { ExerciseCatalog.isRanked($0.liftType) }
-        guard let strongest = rankedEntries.max(by: { lhs, rhs in
-            RankingService.calculateScore(e1RM: lhs.e1RM, bodyweight: bodyweight)
-                < RankingService.calculateScore(e1RM: rhs.e1RM, bodyweight: bodyweight)
-        }) else {
-            return .empty
-        }
-
-        let score = RankingService.calculateScore(
-            e1RM: strongest.e1RM,
-            bodyweight: bodyweight
-        )
-        let rank = Rank.fromScore(score)
-        return StrengthOverview(
-            score: score,
-            rank: rank,
-            progress: RankingService.progress(score: score, rank: rank),
-            sourceExercise: strongest.liftType
-        )
-    }
-
-    static func exerciseScore(
-        entries: [LiftEntry],
-        bodyweight: Double
-    ) -> StrengthOverview {
-        guard let strongest = entries.max(by: { $0.e1RM < $1.e1RM }) else {
-            return .empty
-        }
-        let score = RankingService.calculateScore(
-            e1RM: strongest.e1RM,
-            bodyweight: bodyweight
-        )
-        let rank = Rank.fromScore(score)
-        return StrengthOverview(
-            score: score,
-            rank: rank,
-            progress: RankingService.progress(score: score, rank: rank),
-            sourceExercise: strongest.liftType
-        )
     }
 
     static func totalVolume(
@@ -130,6 +104,96 @@ enum LiftAnalytics {
             return nil
         }
         return ((last.e1RM - first.e1RM) / first.e1RM) * 100
+    }
+
+    static func recentTrendPercent(
+        entries: [LiftEntry],
+        sampleSize: Int = 3
+    ) -> Double? {
+        let chronological = entries.sorted { $0.date < $1.date }
+        guard chronological.count > 1, sampleSize > 0 else { return nil }
+        let count = min(sampleSize, max(1, chronological.count / 2))
+        let baseline = chronological.prefix(count).map(\.e1RM)
+        let recent = chronological.suffix(count).map(\.e1RM)
+        let baselineAverage = baseline.reduce(0, +) / Double(baseline.count)
+        let recentAverage = recent.reduce(0, +) / Double(recent.count)
+        guard baselineAverage > 0 else { return nil }
+        return ((recentAverage - baselineAverage) / baselineAverage) * 100
+    }
+
+    static func snapshot(
+        entries: [LiftEntry],
+        bodyweight: Double
+    ) -> ExerciseProgressSnapshot {
+        let sorted = entries.sorted { $0.date > $1.date }
+        let recent = sorted.prefix(5)
+        let averageWeight = recent.isEmpty
+            ? 0
+            : recent.map(\.weight).reduce(0, +) / Double(recent.count)
+        let loadType = sorted.first?.loadType ?? .externalWeight
+        let heaviest: LiftEntry?
+        if loadType == .assistance {
+            heaviest = entries.min {
+                $0.weight == $1.weight ? $0.reps > $1.reps : $0.weight < $1.weight
+            }
+        } else {
+            heaviest = entries.max {
+                $0.weight == $1.weight ? $0.reps < $1.reps : $0.weight < $1.weight
+            }
+        }
+
+        return ExerciseProgressSnapshot(
+            bestEntry: entries.max(by: { $0.e1RM < $1.e1RM }),
+            heaviestEntry: heaviest,
+            latestEntry: sorted.first,
+            setCount: entries.count,
+            trainingDays: Set(entries.map { Calendar.current.startOfDay(for: $0.date) }).count,
+            totalVolume: totalVolume(entries: entries, bodyweight: bodyweight),
+            recentAverageWeight: averageWeight,
+            trendPercent: recentTrendPercent(entries: entries)
+        )
+    }
+
+    static func weightRepRecords(entries: [LiftEntry]) -> [WeightRepRecord] {
+        let groups = Dictionary(grouping: entries) {
+            WeightSideKey(weight: $0.weight, side: $0.side)
+        }
+        let records = groups.compactMap { key, values -> WeightRepRecord? in
+            guard let best = values.max(by: {
+                $0.reps == $1.reps ? $0.date < $1.date : $0.reps < $1.reps
+            }) else { return nil }
+            return WeightRepRecord(
+                weight: key.weight,
+                reps: best.reps,
+                setCount: values.count,
+                side: key.side,
+                achievedAt: best.date,
+                loadType: best.loadType
+            )
+        }
+        guard let loadType = records.first?.loadType else { return [] }
+        return records.sorted { lhs, rhs in
+            if lhs.weight == rhs.weight {
+                return lhs.side.rawValue < rhs.side.rawValue
+            }
+            return loadType == .assistance
+                ? lhs.weight < rhs.weight
+                : lhs.weight > rhs.weight
+        }
+    }
+
+    static func personalBestEntryIDs(entries: [LiftEntry]) -> Set<UUID> {
+        let chronological = entries.sorted { $0.date < $1.date }
+        var bestBySide: [ExerciseSide: Double] = [:]
+        var recordIDs: Set<UUID> = []
+        for entry in chronological {
+            let previous = bestBySide[entry.side] ?? 0
+            if entry.e1RM > previous {
+                recordIDs.insert(entry.id)
+                bestBySide[entry.side] = entry.e1RM
+            }
+        }
+        return recordIDs
     }
 
     static func insights(
@@ -231,37 +295,6 @@ enum AppStatsSynchronizer {
             stats.setBestE1RM(for: muscle, value: best)
         }
 
-        var xp = 0
-        var bestByExercise: [String: Double] = [:]
-        var seenDays: Set<Date> = []
-        let calendar = Calendar.current
-        var previousUniqueDay: Date?
-
-        for entry in entries {
-            let key = entry.performanceKey
-            let previousBest = bestByExercise[key]
-            let isPR = previousBest.map { entry.e1RM > $0 } ?? false
-            let day = calendar.startOfDay(for: entry.date)
-            let isFirstLogOnDay = seenDays.insert(day).inserted
-            let isConsecutiveDay: Bool
-            if isFirstLogOnDay,
-               let previousUniqueDay,
-               let expectedDay = calendar.date(byAdding: .day, value: 1, to: previousUniqueDay) {
-                isConsecutiveDay = calendar.isDate(expectedDay, inSameDayAs: day)
-            } else {
-                isConsecutiveDay = false
-            }
-
-            xp += RankingService.xp(
-                isNewPersonalBest: isPR,
-                extendsStreak: isConsecutiveDay
-            )
-            bestByExercise[key] = max(previousBest ?? 0, entry.e1RM)
-            if isFirstLogOnDay {
-                previousUniqueDay = day
-            }
-        }
-        stats.xp = xp
         try? context.save()
     }
 

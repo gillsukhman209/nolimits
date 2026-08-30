@@ -68,7 +68,7 @@ struct PaywallView: View {
                         Text("Unlock Liftoff")
                             .font(.system(size: 34, weight: .black))
                             .foregroundColor(.white)
-                        Text("Start your journey to Titan rank")
+                        Text("Every set. Every PR. One clear record.")
                             .font(.system(size: 16))
                             .foregroundColor(.textSecondary)
                     }
@@ -78,8 +78,8 @@ struct PaywallView: View {
 
                 // Features
                 VStack(spacing: 16) {
-                    PaywallFeatureRow(symbolName: "chart.bar.fill",   text: "Track your strength score over time")
-                    PaywallFeatureRow(symbolName: "medal.fill",       text: "Earn and level up through 7 ranks")
+                    PaywallFeatureRow(symbolName: "chart.xyaxis.line", text: "See detailed progress for every exercise")
+                    PaywallFeatureRow(symbolName: "trophy.fill",       text: "Track personal records and rep milestones")
                     PaywallFeatureRow(symbolName: "flame.fill",       text: "Build and maintain your daily streak")
                     PaywallFeatureRow(symbolName: "bell.badge.fill",  text: "Smart daily lift reminders")
                 }

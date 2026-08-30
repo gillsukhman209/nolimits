@@ -119,7 +119,7 @@ struct OnboardingView: View {
         OnboardingQuestionLayout(
             eyebrow: "03 · YOUR METRICS",
             title: "SET YOUR\nBASELINE.",
-            subtitle: "Bodyweight powers your transparent strength rank.",
+            subtitle: "These details keep your training records accurate.",
             canContinue: validMetrics,
             onBack: { step = 2 },
             onContinue: finish

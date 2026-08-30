@@ -1,13 +1,12 @@
-import SwiftUI
-import SwiftData
 import Charts
+import SwiftData
+import SwiftUI
 
 struct ExerciseDetailView: View {
     enum SideScope: String, CaseIterable, Identifiable {
         case all = "All"
         case left = "Left"
         case right = "Right"
-
         var id: String { rawValue }
 
         var side: ExerciseSide? {
@@ -22,8 +21,8 @@ struct ExerciseDetailView: View {
     enum TrendRange: String, CaseIterable, Identifiable {
         case fourWeeks = "4W"
         case threeMonths = "3M"
+        case oneYear = "1Y"
         case all = "ALL"
-
         var id: String { rawValue }
 
         func contains(_ date: Date, now: Date = .now) -> Bool {
@@ -33,10 +32,19 @@ struct ExerciseDetailView: View {
                 return date >= (calendar.date(byAdding: .day, value: -28, to: now) ?? now)
             case .threeMonths:
                 return date >= (calendar.date(byAdding: .month, value: -3, to: now) ?? now)
+            case .oneYear:
+                return date >= (calendar.date(byAdding: .year, value: -1, to: now) ?? now)
             case .all:
                 return true
             }
         }
+    }
+
+    enum ChartMetric: String, CaseIterable, Identifiable {
+        case weight = "Weight"
+        case estimatedMax = "Est. max"
+        case reps = "Reps"
+        var id: String { rawValue }
     }
 
     let exercise: Exercise
@@ -48,12 +56,10 @@ struct ExerciseDetailView: View {
     @Query private var entries: [LiftEntry]
     @State private var sideScope: SideScope = .all
     @State private var trendRange: TrendRange = .threeMonths
+    @State private var chartMetric: ChartMetric = .weight
     @State private var editPresentation: EditSetPresentation?
 
-    init(
-        exercise: Exercise,
-        onLog: @escaping (ExerciseSide?) -> Void
-    ) {
+    init(exercise: Exercise, onLog: @escaping (ExerciseSide?) -> Void) {
         self.exercise = exercise
         self.onLog = onLog
         let name = exercise.name
@@ -64,12 +70,8 @@ struct ExerciseDetailView: View {
         )
     }
 
-    private var exerciseName: String { exercise.name }
-    private var muscleGroup: MuscleGroup { exercise.muscleGroup }
-
     private var tracksSides: Bool {
-        exercise.sideTracking == .separate
-            || entries.contains { $0.side != .both }
+        exercise.sideTracking == .separate || entries.contains { $0.side != .both }
     }
 
     private var visibleEntries: [LiftEntry] {
@@ -77,89 +79,62 @@ struct ExerciseDetailView: View {
         return entries.filter { $0.side == side }
     }
 
-    private var bestEntry: LiftEntry? {
-        visibleEntries.max(by: { $0.e1RM < $1.e1RM })
-    }
-
-    private var overview: StrengthOverview {
-        LiftAnalytics.exerciseScore(
-            entries: visibleEntries,
-            bodyweight: profiles.first?.bodyweight ?? 0
-        )
-    }
-
-    private var trendEntries: [LiftEntry] {
+    private var chartEntries: [LiftEntry] {
         visibleEntries
             .filter { trendRange.contains($0.date) }
             .sorted { $0.date < $1.date }
     }
 
-    private var visibleVolume: Double {
-        LiftAnalytics.totalVolume(
+    private var snapshot: ExerciseProgressSnapshot {
+        LiftAnalytics.snapshot(
             entries: visibleEntries,
             bodyweight: profiles.first?.bodyweight ?? 0
         )
     }
 
+    private var repRecords: [WeightRepRecord] {
+        LiftAnalytics.weightRepRecords(entries: visibleEntries)
+    }
+
+    private var personalBestIDs: Set<UUID> {
+        LiftAnalytics.personalBestEntryIDs(entries: entries)
+    }
+
+    private var displayedTrend: Double? {
+        if tracksSides && sideScope == .all {
+            let sideTrends = [ExerciseSide.left, .right].compactMap { side in
+                LiftAnalytics.recentTrendPercent(entries: entries.filter { $0.side == side })
+            }
+            guard !sideTrends.isEmpty else {
+                return LiftAnalytics.recentTrendPercent(entries: visibleEntries)
+            }
+            return sideTrends.reduce(0, +) / Double(sideTrends.count)
+        }
+        return snapshot.trendPercent
+    }
+
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 22) {
                 header
-                if tracksSides {
-                    sidePicker
-                }
-                metrics
-                if bestEntry != nil {
-                    nextTargetCard
-                }
-
-                if ExerciseCatalog.isRanked(exerciseName), !visibleEntries.isEmpty {
-                    rankCard
-                }
-
-                if trendEntries.count > 1,
-                   !tracksSides || sideScope != .all {
-                    trendCard
-                }
-
-                history
+                if tracksSides { sidePicker }
+                progressHero
+                metricsGrid
+                if snapshot.bestEntry != nil { nextTargetCard }
+                if chartEntries.count > 1 { chartCard }
+                if !repRecords.isEmpty { repRecordSection }
+                historySection
             }
             .padding(.horizontal, 24)
             .padding(.top, 12)
             .padding(.bottom, 110)
         }
         .background(Color.paper.ignoresSafeArea())
-        .safeAreaInset(edge: .bottom) {
-            Button {
-                let preferredSide = sideScope.side
-                    ?? (tracksSides ? .left : nil)
-                onLog(preferredSide)
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 15, weight: .black))
-                    Text(logButtonTitle)
-                        .font(.system(size: 18, weight: .black))
-                        .fontWidth(.compressed)
-                        .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 58)
-            }
-            .buttonStyle(OrangeButtonStyle())
-            .padding(.horizontal, 24)
-            .padding(.vertical, 10)
-            .background(.ultraThinMaterial)
-        }
+        .safeAreaInset(edge: .bottom) { logButton }
         .toolbar(.hidden, for: .navigationBar)
         .sheet(item: $editPresentation) { presentation in
             EditSetSheet(entry: presentation.entry)
         }
-    }
-
-    private var logButtonTitle: String {
-        let sidePrefix = sideScope.side.map { "\($0.rawValue.uppercased()) " } ?? ""
-        return "LOG \(sidePrefix)\(exerciseName.uppercased())"
     }
 
     private var header: some View {
@@ -174,20 +149,18 @@ struct ExerciseDetailView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Back")
-
                 Spacer()
-
-                Text(muscleGroup.rawValue.uppercased())
+                Text(exercise.muscleGroup.rawValue.uppercased())
                     .font(.system(size: 11, weight: .black))
                     .tracking(1.6)
                     .foregroundStyle(Color.inkMuted)
             }
 
             HStack(alignment: .bottom, spacing: 14) {
-                ExerciseIcon(muscleGroup: muscleGroup, size: 58, inverted: true)
-                Text(exerciseName.uppercased())
-                    .editorialTitle(size: 46, lineSpacing: -5)
-                    .minimumScaleFactor(0.66)
+                ExerciseIcon(muscleGroup: exercise.muscleGroup, size: 58, inverted: true)
+                Text(exercise.name.uppercased())
+                    .editorialTitle(size: 44, lineSpacing: -5)
+                    .minimumScaleFactor(0.62)
                     .foregroundStyle(Color.ink)
                     .lineLimit(2)
             }
@@ -198,17 +171,13 @@ struct ExerciseDetailView: View {
         HStack(spacing: 4) {
             ForEach(SideScope.allCases) { scope in
                 Button {
-                    withAnimation(.easeOut(duration: 0.18)) {
-                        sideScope = scope
-                    }
+                    withAnimation(.easeOut(duration: 0.18)) { sideScope = scope }
                 } label: {
                     Text(scope.rawValue.uppercased())
                         .font(.system(size: 12, weight: .black))
                         .fontWidth(.condensed)
                         .tracking(0.8)
-                        .foregroundStyle(
-                            sideScope == scope ? Color.paper : Color.inkMuted
-                        )
+                        .foregroundStyle(sideScope == scope ? Color.paper : Color.inkMuted)
                         .frame(maxWidth: .infinity)
                         .frame(height: 40)
                         .background(sideScope == scope ? Color.ink : Color.clear)
@@ -219,102 +188,109 @@ struct ExerciseDetailView: View {
             }
         }
         .padding(4)
-        .background(
-            Color.hairline.opacity(0.34),
-            in: RoundedRectangle(cornerRadius: 14)
-        )
+        .background(Color.hairline.opacity(0.34), in: RoundedRectangle(cornerRadius: 14))
     }
 
-    @ViewBuilder
-    private var metrics: some View {
-        if tracksSides, sideScope == .all {
-            HStack(spacing: 10) {
-                sideMetric(side: .left)
-                sideMetric(side: .right)
-                MetricTile(
-                    label: "LOGS",
-                    value: "\(entries.count)",
-                    detail: entries.count == 1 ? "entry" : "entries"
-                )
-            }
-        } else {
-            HStack(spacing: 10) {
-                MetricTile(
-                    label: exercise.loadType == .assistance
-                        ? "BEST ASSIST."
-                        : "BEST SET",
-                    value: bestEntry.map {
-                        "\($0.weight.formattedWeight) × \($0.reps)"
-                    } ?? "—",
-                    detail: "lb × reps"
-                )
-                MetricTile(
-                    label: exercise.loadType == .assistance
-                        ? "EFFECTIVE MAX"
-                        : "EST. MAX",
-                    value: bestEntry.map { $0.e1RM.formattedWeight } ?? "—",
-                    detail: "lb"
-                )
-                MetricTile(
-                    label: "LOGS",
-                    value: "\(visibleEntries.count)",
-                    detail: visibleEntries.count == 1 ? "entry" : "entries"
-                )
-            }
-        }
-    }
-
-    private func sideMetric(side: ExerciseSide) -> some View {
-        let best = entries
-            .filter { $0.side == side }
-            .max(by: { $0.e1RM < $1.e1RM })
-        return MetricTile(
-            label: "\(side.rawValue.uppercased()) PB",
-            value: best.map {
-                "\($0.weight.formattedWeight) × \($0.reps)"
-            } ?? "—",
-            detail: "lb × reps"
-        )
-    }
-
-    private var rankCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
+    private var progressHero: some View {
+        VStack(alignment: .leading, spacing: 17) {
+            HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("EXERCISE RANK")
-                        .sectionEyebrow()
-                    Text(overview.rank.rawValue.uppercased())
-                        .font(.system(size: 30, weight: .black))
+                    Text("PERFORMANCE TREND")
+                        .font(.system(size: 11, weight: .black))
+                        .tracking(1.8)
+                        .foregroundStyle(Color.signalPaper.opacity(0.62))
+                    Text(trendHeadline)
+                        .font(.system(size: 31, weight: .black))
                         .fontWidth(.compressed)
-                        .foregroundStyle(Color.ink)
+                        .foregroundStyle(Color.signalPaper)
                 }
                 Spacer()
-                Text(String(format: "%.2f×", overview.score))
-                    .font(.system(size: 30, weight: .black))
-                    .fontWidth(.compressed)
-                    .foregroundStyle(overview.rank.color)
+                Image(systemName: trendIcon)
+                    .font(.system(size: 26, weight: .black))
+                    .foregroundStyle(Color.signalOrange)
             }
 
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.hairline.opacity(0.5))
-                    Capsule()
-                        .fill(Color.signalOrange)
-                        .frame(width: max(8, geometry.size.width * overview.progress))
+            Text(trendDetail)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color.signalPaper.opacity(0.66))
+
+            if let best = snapshot.bestEntry {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("BEST PR")
+                            .font(.system(size: 9, weight: .black))
+                            .tracking(1.2)
+                            .foregroundStyle(Color.signalPaper.opacity(0.52))
+                        Text(setDescription(best))
+                            .font(.system(size: 18, weight: .black))
+                            .fontWidth(.condensed)
+                            .foregroundStyle(Color.signalPaper)
+                    }
+                    Spacer()
+                    Text(best.date.formatted(date: .abbreviated, time: .omitted))
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.signalPaper.opacity(0.58))
                 }
+                .padding(.top, 2)
             }
-            .frame(height: 8)
-
-            HStack {
-                Text("\(Int(overview.progress * 100))% through \(overview.rank.rawValue)")
-                Spacer()
-                Text(overview.rank.nextRank.map { "Next: \($0.rawValue)" } ?? "Top rank")
-            }
-            .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(Color.inkMuted)
         }
-        .padding(18)
-        .cardStyle(cornerRadius: 18)
+        .padding(20)
+        .background(Color.signalInk, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+
+    private var trendHeadline: String {
+        guard let trend = displayedTrend else {
+            return visibleEntries.isEmpty ? "NO SETS YET" : "BASELINE SAVED"
+        }
+        if trend > 1 { return "UP \(trend.formatted(.number.precision(.fractionLength(1))))%" }
+        if trend < -1 { return "DOWN \(abs(trend).formatted(.number.precision(.fractionLength(1))))%" }
+        return "HOLDING STEADY"
+    }
+
+    private var trendIcon: String {
+        guard let trend = displayedTrend else { return "scope" }
+        if trend > 1 { return "arrow.up.right" }
+        if trend < -1 { return "arrow.down.right" }
+        return "arrow.right"
+    }
+
+    private var trendDetail: String {
+        guard displayedTrend != nil else {
+            return visibleEntries.count < 2
+                ? "Save at least two sets to calculate a performance trend."
+                : "Add more sets to establish a reliable trend."
+        }
+        return "Compares the estimated-max average from your earliest and most recent sets in this view."
+    }
+
+    private var metricsGrid: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                DetailMetricTile(
+                    label: exercise.loadType == .assistance ? "BEST ASSISTANCE" : "BEST SET",
+                    value: snapshot.bestEntry.map(setDescription) ?? "—",
+                    detail: "highest estimated performance"
+                )
+                DetailMetricTile(
+                    label: exercise.loadType == .assistance ? "EFFECTIVE MAX" : "ESTIMATED MAX",
+                    value: snapshot.bestEntry.map { "\($0.e1RM.formattedWeight) lb" } ?? "—",
+                    detail: "calculated from weight × reps"
+                )
+            }
+            HStack(spacing: 10) {
+                DetailMetricTile(
+                    label: exercise.loadType == .assistance ? "RECENT ASSIST." : "RECENT AVG.",
+                    value: visibleEntries.isEmpty ? "—" : "\(snapshot.recentAverageWeight.formattedWeight) lb",
+                    detail: "average of last 5 sets"
+                )
+                DetailMetricTile(
+                    label: "HISTORY",
+                    value: "\(snapshot.setCount) sets",
+                    detail: "across \(snapshot.trainingDays) training day\(snapshot.trainingDays == 1 ? "" : "s")"
+                )
+            }
+        }
     }
 
     private var nextTargetCard: some View {
@@ -324,16 +300,13 @@ struct ExerciseDetailView: View {
                 .foregroundStyle(Color.signalOrange)
                 .frame(width: 40, height: 40)
                 .background(Color.signalOrange.opacity(0.1), in: Circle())
-
             VStack(alignment: .leading, spacing: 2) {
-                Text("NEXT TARGET")
-                    .sectionEyebrow()
+                Text("NEXT MILESTONE").sectionEyebrow()
                 Text(nextTargetDescription)
                     .font(.system(size: 18, weight: .black))
                     .fontWidth(.condensed)
                     .foregroundStyle(Color.ink)
             }
-
             Spacer()
         }
         .padding(15)
@@ -342,114 +315,197 @@ struct ExerciseDetailView: View {
     }
 
     private var nextTargetDescription: String {
-        guard let bestEntry else { return "Log a baseline set" }
-        let side = bestEntry.side == .both ? "" : "\(bestEntry.side.rawValue) · "
+        guard let best = snapshot.bestEntry else { return "Log a baseline set" }
+        let side = best.side == .both ? "" : "\(best.side.rawValue) · "
         if exercise.loadType == .assistance {
-            if bestEntry.weight > 0 {
-                return "\(side)\(max(bestEntry.weight - 5, 0).formattedWeight) lb assist × \(bestEntry.reps)"
-            }
-            return "\(side)0 lb assist × \(bestEntry.reps + 1)"
+            return best.weight > 0
+                ? "\(side)\(max(best.weight - 5, 0).formattedWeight) lb assist × \(best.reps)"
+                : "\(side)0 lb assist × \(best.reps + 1)"
         }
-        if bestEntry.reps >= 12 {
-            return "\(side)\((bestEntry.weight + 5).formattedWeight) lb × 8"
-        }
-        return "\(side)\(bestEntry.weight.formattedWeight) lb × \(bestEntry.reps + 1)"
+        return best.reps >= 12
+            ? "\(side)\((best.weight + 5).formattedWeight) lb × 8"
+            : "\(side)\(best.weight.formattedWeight) lb × \(best.reps + 1)"
     }
 
-    private var trendCard: some View {
+    private var chartCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(
-                    exercise.loadType == .assistance
-                        ? "EFFECTIVE LOAD TREND"
-                        : "E1RM TREND"
-                )
-                    .sectionEyebrow()
-                Spacer()
-                if let change = LiftAnalytics.changePercent(entries: visibleEntries) {
-                    Text("\(change >= 0 ? "+" : "")\(change, format: .number.precision(.fractionLength(1)))%")
-                        .font(.system(size: 13, weight: .black))
-                        .foregroundStyle(change >= 0 ? Color.success : Color.inkMuted)
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("EVERY SET, CHARTED").sectionEyebrow()
+                    Text(chartSubtitle)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Color.inkMuted)
                 }
+                Spacer()
+                Text("\(chartEntries.count) sets")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color.inkMuted)
             }
 
             HStack(spacing: 4) {
-                ForEach(TrendRange.allCases) { range in
-                    Button {
-                        withAnimation(.easeOut(duration: 0.18)) {
-                            trendRange = range
-                        }
-                    } label: {
-                        Text(range.rawValue)
-                            .font(.system(size: 10, weight: .black))
-                            .foregroundStyle(trendRange == range ? Color.paper : Color.inkMuted)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 30)
-                            .background(trendRange == range ? Color.ink : Color.clear)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                ForEach(ChartMetric.allCases) { metric in
+                    selectionButton(metric.rawValue, isSelected: chartMetric == metric) {
+                        withAnimation(.easeOut(duration: 0.18)) { chartMetric = metric }
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(trendRange == range ? .isSelected : [])
                 }
             }
-            .padding(3)
-            .background(Color.hairline.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
+            .selectionBarStyle()
 
-            Chart(trendEntries, id: \.id) { entry in
-                AreaMark(
-                    x: .value("Date", entry.date),
-                    y: .value("Performance max", entry.e1RM)
-                )
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.signalOrange.opacity(0.28), .signalOrange.opacity(0.02)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-
+            Chart(chartEntries, id: \.id) { entry in
                 LineMark(
                     x: .value("Date", entry.date),
-                    y: .value("Performance max", entry.e1RM)
+                    y: .value(chartMetric.rawValue, chartValue(entry))
                 )
-                .foregroundStyle(Color.signalOrange)
-                .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                .foregroundStyle(by: .value("Side", chartSeries(entry)))
+                .lineStyle(StrokeStyle(lineWidth: 2.8, lineCap: .round, lineJoin: .round))
+                .interpolationMethod(.catmullRom)
 
                 PointMark(
                     x: .value("Date", entry.date),
-                    y: .value("Performance max", entry.e1RM)
+                    y: .value(chartMetric.rawValue, chartValue(entry))
                 )
-                .foregroundStyle(Color.ink)
-                .symbolSize(24)
+                .foregroundStyle(by: .value("Side", chartSeries(entry)))
+                .symbolSize(personalBestIDs.contains(entry.id) ? 42 : 24)
             }
-            .chartXAxis(.hidden)
-            .chartYAxis {
-                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) {
-                    AxisGridLine().foregroundStyle(Color.hairline.opacity(0.55))
-                    AxisValueLabel()
-                        .font(.system(size: 10, weight: .bold))
+            .chartForegroundStyleScale([
+                "All sets": Color.signalOrange,
+                "Both": Color.signalOrange,
+                "Left": Color(red: 0.18, green: 0.48, blue: 0.78),
+                "Right": Color.success,
+            ])
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 4)) { value in
+                    AxisGridLine().foregroundStyle(Color.hairline.opacity(0.38))
+                    AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+                        .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(Color.inkMuted)
                 }
             }
-            .frame(height: 150)
-            .accessibilityLabel(
-                exercise.loadType == .assistance
-                    ? "Effective load trend"
-                    : "Estimated one rep max trend"
-            )
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) {
+                    AxisGridLine().foregroundStyle(Color.hairline.opacity(0.5))
+                    AxisValueLabel()
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Color.inkMuted)
+                }
+            }
+            .chartLegend(tracksSides && sideScope == .all ? .visible : .hidden)
+            .frame(height: 220)
+            .accessibilityLabel("\(chartMetric.rawValue) chart for \(exercise.name)")
+
+            HStack(spacing: 4) {
+                ForEach(TrendRange.allCases) { range in
+                    selectionButton(range.rawValue, isSelected: trendRange == range) {
+                        withAnimation(.easeOut(duration: 0.18)) { trendRange = range }
+                    }
+                }
+            }
+            .selectionBarStyle()
         }
         .padding(18)
         .cardStyle(cornerRadius: 18)
     }
 
-    private var history: some View {
+    private var chartSubtitle: String {
+        switch chartMetric {
+        case .weight:
+            return exercise.loadType == .assistance
+                ? "Assistance used for each set · lower is harder"
+                : "Actual working weight used for every set"
+        case .estimatedMax:
+            return "Weight and reps combined into one performance estimate"
+        case .reps:
+            return "Repetitions completed in every set"
+        }
+    }
+
+    private func chartValue(_ entry: LiftEntry) -> Double {
+        switch chartMetric {
+        case .weight: return entry.weight
+        case .estimatedMax: return entry.e1RM
+        case .reps: return Double(entry.reps)
+        }
+    }
+
+    private func chartSeries(_ entry: LiftEntry) -> String {
+        if tracksSides && sideScope == .all { return entry.side.rawValue }
+        return "All sets"
+    }
+
+    private func selectionButton(
+        _ title: String,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title.uppercased())
+                .font(.system(size: 9, weight: .black))
+                .tracking(0.3)
+                .foregroundStyle(isSelected ? Color.paper : Color.inkMuted)
+                .frame(maxWidth: .infinity)
+                .frame(height: 31)
+                .background(isSelected ? Color.ink : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var repRecordSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("REP RECORDS BY WEIGHT").sectionEyebrow()
+                Text(exercise.loadType == .assistance
+                     ? "Your best reps at each assistance level"
+                     : "Your best reps at every weight you have used")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.inkMuted)
+            }
+
+            ForEach(repRecords) { record in
+                HStack(spacing: 13) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(record.loadType == .assistance ? "ASSISTANCE" : "WEIGHT")
+                            .font(.system(size: 9, weight: .black))
+                            .tracking(1)
+                            .foregroundStyle(Color.inkMuted)
+                        Text("\(record.weight.formattedWeight) lb")
+                            .font(.system(size: 22, weight: .black))
+                            .fontWidth(.compressed)
+                            .foregroundStyle(Color.ink)
+                    }
+                    if record.side != .both {
+                        Text(record.side.shortLabel)
+                            .font(.system(size: 9, weight: .black))
+                            .foregroundStyle(Color.ink)
+                            .frame(width: 25, height: 25)
+                            .background(Color.hairline.opacity(0.5), in: Circle())
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("\(record.reps) REPS")
+                            .font(.system(size: 19, weight: .black))
+                            .fontWidth(.condensed)
+                            .foregroundStyle(Color.signalOrange)
+                        Text("\(record.setCount) set\(record.setCount == 1 ? "" : "s") · \(record.achievedAt.formatted(date: .abbreviated, time: .omitted))")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(Color.inkMuted)
+                    }
+                }
+                .padding(14)
+                .cardStyle(cornerRadius: 15)
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
+
+    private var historySection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("ALL SETS")
-                    .sectionEyebrow()
+                Text("ALL SETS").sectionEyebrow()
                 Spacer()
                 if !visibleEntries.isEmpty {
-                    Text("\(visibleVolume.formattedWeight) lb work")
+                    Text("\(snapshot.totalVolume.formattedWeight) lb work")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(Color.inkMuted)
                 }
@@ -466,10 +522,8 @@ struct ExerciseDetailView: View {
                 ForEach(visibleEntries, id: \.id) { entry in
                     ExerciseLogRow(
                         entry: entry,
-                        isPersonalBest: isPersonalBest(entry),
-                        onEdit: {
-                            editPresentation = EditSetPresentation(entry: entry)
-                        },
+                        isPersonalBest: personalBestIDs.contains(entry.id),
+                        onEdit: { editPresentation = EditSetPresentation(entry: entry) },
                         onDelete: { delete(entry) }
                     )
                 }
@@ -481,14 +535,40 @@ struct ExerciseDetailView: View {
         if let side = sideScope.side {
             return "No \(side.rawValue.lowercased())-side sets yet."
         }
-        return "No \(exerciseName) sets yet."
+        return "No \(exercise.name) sets yet."
     }
 
-    private func isPersonalBest(_ entry: LiftEntry) -> Bool {
-        let comparableEntries = tracksSides
-            ? entries.filter { $0.side == entry.side }
-            : entries
-        return entry.id == comparableEntries.max(by: { $0.e1RM < $1.e1RM })?.id
+    private var logButton: some View {
+        Button {
+            let preferredSide = sideScope.side ?? (tracksSides ? .left : nil)
+            onLog(preferredSide)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "plus")
+                    .font(.system(size: 15, weight: .black))
+                Text(logButtonTitle)
+                    .font(.system(size: 18, weight: .black))
+                    .fontWidth(.compressed)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 58)
+        }
+        .buttonStyle(OrangeButtonStyle())
+        .padding(.horizontal, 24)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
+    }
+
+    private var logButtonTitle: String {
+        let sidePrefix = sideScope.side.map { "\($0.rawValue.uppercased()) " } ?? ""
+        return "LOG \(sidePrefix)\(exercise.name.uppercased())"
+    }
+
+    private func setDescription(_ entry: LiftEntry) -> String {
+        let side = entry.side == .both ? "" : "\(entry.side.shortLabel) · "
+        let assistance = entry.loadType == .assistance ? " assist" : ""
+        return "\(side)\(entry.weight.formattedWeight) lb\(assistance) × \(entry.reps)"
     }
 
     private func delete(_ entry: LiftEntry) {
@@ -498,7 +578,14 @@ struct ExerciseDetailView: View {
     }
 }
 
-struct MetricTile: View {
+private extension View {
+    func selectionBarStyle() -> some View {
+        padding(3)
+            .background(Color.hairline.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+struct DetailMetricTile: View {
     let label: String
     let value: String
     let detail: String
@@ -506,21 +593,23 @@ struct MetricTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(label)
-                .font(.system(size: 10, weight: .black))
-                .tracking(1.3)
+                .font(.system(size: 9, weight: .black))
+                .tracking(1.1)
                 .foregroundStyle(Color.inkMuted)
             Text(value)
-                .font(.system(size: 21, weight: .black))
+                .font(.system(size: 20, weight: .black))
                 .fontWidth(.compressed)
                 .foregroundStyle(Color.ink)
-                .minimumScaleFactor(0.65)
+                .minimumScaleFactor(0.58)
                 .lineLimit(1)
             Text(detail)
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: 9, weight: .medium))
                 .foregroundStyle(Color.inkFaint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
         }
         .padding(13)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
         .cardStyle(cornerRadius: 15)
     }
 }
@@ -542,36 +631,33 @@ struct ExerciseLogRow: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Color.inkFaint)
             }
-
             Spacer()
-
             if isPersonalBest {
-                Text("PB")
+                Text("PR")
                     .font(.system(size: 10, weight: .black))
                     .foregroundStyle(Color.white)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
                     .background(Color.signalOrange, in: Capsule())
             }
-
             if entry.side != .both {
                 Text(entry.side.shortLabel)
-                    .font(.system(size: 10, weight: .black))
+                    .font(.system(size: 9, weight: .black))
                     .foregroundStyle(Color.ink)
-                    .frame(width: 26, height: 26)
+                    .frame(width: 24, height: 24)
                     .background(Color.hairline.opacity(0.55), in: Circle())
-                    .accessibilityLabel(entry.side.rawValue)
             }
-
-            Text(loadDescription)
-                .font(.system(size: 19, weight: .black))
-                .fontWidth(.condensed)
-                .foregroundStyle(Color.ink)
-
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(loadDescription)
+                    .font(.system(size: 18, weight: .black))
+                    .fontWidth(.condensed)
+                    .foregroundStyle(Color.ink)
+                Text("Est. max \(entry.e1RM.formattedWeight) lb")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(Color.inkMuted)
+            }
             Menu {
-                Button(action: onEdit) {
-                    Label("Edit set", systemImage: "pencil")
-                }
+                Button(action: onEdit) { Label("Edit set", systemImage: "pencil") }
                 Button(role: .destructive, action: onDelete) {
                     Label("Delete set", systemImage: "trash")
                 }
@@ -579,11 +665,12 @@ struct ExerciseLogRow: View {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(Color.inkMuted)
-                    .frame(width: 28, height: 38)
+                    .frame(width: 28, height: 40)
             }
         }
         .padding(14)
-        .cardStyle(cornerRadius: 15)
+        .cardStyle(cornerRadius: 16)
+        .accessibilityElement(children: .combine)
     }
 
     private var loadDescription: String {

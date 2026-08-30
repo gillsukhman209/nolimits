@@ -108,6 +108,7 @@ struct ContentView: View {
     private var shouldShowOnboarding: Bool {
         profiles.first == nil
     }
+
 }
 
 struct LiftoffShellView: View {
@@ -120,7 +121,6 @@ struct LiftoffShellView: View {
     @State private var showSettings = false
     @State private var showRestTimer = false
     @State private var loggerPresentation: LogPresentation?
-    @State private var rankUpResult: SaveResult?
     @State private var savedFeedback: SaveResult?
     @State private var restTimer = RestTimerController()
 
@@ -174,17 +174,6 @@ struct LiftoffShellView: View {
         }
         .sheet(isPresented: $showRestTimer) {
             RestTimerSheet(timer: restTimer)
-        }
-        .fullScreenCover(item: $rankUpResult) { result in
-            RankUpView(
-                rank: result.newRank,
-                exerciseName: result.exerciseName,
-                onContinue: {
-                    rankUpResult = nil
-                    path.removeAll()
-                    selectedTab = .today
-                }
-            )
         }
         .overlay(alignment: .top) {
             if let savedFeedback {
@@ -256,10 +245,6 @@ struct LiftoffShellView: View {
         if autoStartRestTimer {
             restTimer.start(seconds: restTimerDuration)
         }
-        guard result.didRankUp else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            rankUpResult = result
-        }
     }
 }
 
@@ -275,7 +260,7 @@ struct SetSavedToast: View {
                 .background(Color.signalOrange, in: Circle())
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(result.isNewPR ? "NEW PERSONAL BEST" : "SET SAVED")
+                Text(feedbackTitle)
                     .font(.system(size: 12, weight: .black))
                     .tracking(0.9)
                     .foregroundStyle(Color.signalPaper)
@@ -286,7 +271,7 @@ struct SetSavedToast: View {
 
             Spacer()
 
-            Text("+\(result.xpEarned) XP")
+            Text("\(result.weight.formattedWeight) LB × \(result.reps)")
                 .font(.system(size: 13, weight: .black))
                 .foregroundStyle(Color.signalOrange)
         }
@@ -295,6 +280,12 @@ struct SetSavedToast: View {
         .background(Color.signalInk, in: RoundedRectangle(cornerRadius: 18))
         .shadow(color: Color.black.opacity(0.18), radius: 14, y: 7)
         .accessibilityElement(children: .combine)
+    }
+
+    private var feedbackTitle: String {
+        if result.isNewPR { return "NEW PERSONAL BEST" }
+        if result.isFirstSet { return "BASELINE SAVED" }
+        return "SET SAVED"
     }
 }
 

@@ -214,23 +214,6 @@ struct ExerciseCatalog {
     /// Use `allExercises(context:)` to include custom exercises.
     static var all: [Exercise] { builtIn }
 
-    /// These compound lifts drive the overall rank. Accessory work still gets
-    /// complete history, PRs, trends, and an exercise-specific strength score.
-    static let rankedExerciseNames: Set<String> = [
-        "Bench Press",
-        "Incline Bench",
-        "Barbell Row",
-        "OHP",
-        "Squat",
-        "Front Squat",
-        "Deadlift",
-        "Romanian Deadlift",
-    ]
-
-    static func isRanked(_ exerciseName: String) -> Bool {
-        rankedExerciseNames.contains(exerciseName)
-    }
-
     static func allExercises(context: ModelContext) -> [Exercise] {
         let custom = (try? context.fetch(FetchDescriptor<CustomExercise>())) ?? []
         let customExercises = custom.compactMap { ce -> Exercise? in

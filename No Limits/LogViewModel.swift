@@ -7,16 +7,10 @@ struct SaveResult: Identifiable {
     let exerciseName: String
     let muscleGroup: MuscleGroup
     let side: ExerciseSide
+    let weight: Double
+    let reps: Int
     let isNewPR: Bool
-    let xpEarned: Int
-    let newRank: Rank
-    let previousRank: Rank
-    let isRankedExercise: Bool
-
-    var didRankUp: Bool {
-        guard isRankedExercise, newRank != previousRank else { return false }
-        return newRank.lowerBound > previousRank.lowerBound
-    }
+    let isFirstSet: Bool
 }
 
 @MainActor
@@ -94,34 +88,14 @@ final class LogViewModel {
         )) ?? []
         let entrySide = exercise.sideTracking == .separate ? selectedSide : .both
         let existingEntries = exerciseEntries.filter { $0.side == entrySide }
-        let allEntries = (try? context.fetch(
-            FetchDescriptor<LiftEntry>(sortBy: [SortDescriptor(\.date, order: .reverse)])
-        )) ?? []
         let profile = try? context.fetch(FetchDescriptor<UserProfile>()).first
 
         let previousBest = existingEntries.map(\.e1RM).max() ?? 0
-        let previousScore = RankingService.calculateScore(
-            e1RM: previousBest,
-            bodyweight: profile?.bodyweight ?? 0
-        )
-        let previousRank = Rank.fromScore(previousScore)
         let newE1RM = currentE1RM
         let isNewPR = PerformanceService.isPersonalBest(
             candidate: newE1RM,
             previousBest: previousBest
         )
-        let hasLoggedToday = allEntries.contains {
-            Calendar.current.isDate($0.date, inSameDayAs: now)
-        }
-        let extendsStreak: Bool = {
-            guard !hasLoggedToday,
-                  let latestDate = allEntries.first?.date,
-                  let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now) else {
-                return false
-            }
-            return Calendar.current.isDate(latestDate, inSameDayAs: yesterday)
-        }()
-
         let entry = LiftEntry(
             date: now,
             liftType: exercise.name,
@@ -136,22 +110,14 @@ final class LogViewModel {
         try? context.save()
         AppStatsSynchronizer.rebuild(context: context)
 
-        let newScore = RankingService.calculateScore(
-            e1RM: max(previousBest, newE1RM),
-            bodyweight: profile?.bodyweight ?? 0
-        )
         let result = SaveResult(
             exerciseName: exercise.name,
             muscleGroup: exercise.muscleGroup,
             side: entrySide,
+            weight: numericWeight,
+            reps: numericReps,
             isNewPR: isNewPR,
-            xpEarned: RankingService.xp(
-                isNewPersonalBest: isNewPR,
-                extendsStreak: extendsStreak
-            ),
-            newRank: Rank.fromScore(newScore),
-            previousRank: previousRank,
-            isRankedExercise: ExerciseCatalog.isRanked(exercise.name)
+            isFirstSet: existingEntries.isEmpty
         )
         isSaving = false
         return result
